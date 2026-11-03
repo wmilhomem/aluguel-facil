@@ -1,0 +1,6 @@
+{
+  "name": "Aluguel Fácil - Cobrança Automática de Aluguéis",
+  "description": "Sistema simples para locadores informais cobrarem aluguel automaticamente pelo WhatsApp com Pix e recibos instantâneos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
