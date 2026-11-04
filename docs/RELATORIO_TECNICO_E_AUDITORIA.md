@@ -2,6 +2,11 @@
 
 > Documento de referência do handover. Consolida o relatório recebido e a auditoria
 > realizada diretamente no repositório em 03/11/2026.
+>
+> **Status em 03/11/2026:** Fase 1 (camada de dados real) e Fase 2 (RLS e fatura
+> pública por token) concluídas. Os itens abaixo permanecem como registro do
+> estado encontrado na auditoria inicial; as correções aplicadas estão descritas
+> em `docs/PLANO_LINHA_DE_BASE.md` e `docs/FASE_2_SEGURANCA_E_FATURA.md`.
 
 ## 1. Contexto do produto
 

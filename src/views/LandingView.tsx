@@ -24,7 +24,7 @@ export const LandingView: React.FC = () => {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [copiedDemo, setCopiedDemo] = useState(false);
 
-  const demoMessage = `Olá, Carlos! Tudo bem? Passando para lembrar que o aluguel da Kitnet 01 vence hoje (10/11), no valor de R$ 850,00. Chave Pix: maria.locadora@gmail.com. Link da fatura com QR Code: https://aluguelfacil.app/#fatura-demo. Qualquer dúvida, estou à disposição!`;
+  const demoMessage = `Olá, Carlos! Tudo bem? Passando para lembrar que o aluguel da Kitnet 01 vence hoje (10/11), no valor de R$ 850,00. Chave Pix: maria.locadora@gmail.com. Link da fatura com QR Code: https://aluguelfacil.app/#fatura-22222222-2222-4222-8222-222222222222. Qualquer dúvida, estou à disposição!`;
 
   const handleCopyDemo = () => {
     navigator.clipboard.writeText(demoMessage);
@@ -195,7 +195,7 @@ export const LandingView: React.FC = () => {
 
                   <div className="space-y-2">
                     <button
-                      onClick={() => navigate('/fatura', { id: 'cob_demo_2' })}
+                      onClick={() => navigate('/fatura', { id: '22222222-2222-4222-8222-222222222222' })}
                       className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2"
                     >
                       <span>Simular Fatura do Inquilino com Pix QR Code</span>

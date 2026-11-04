@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { isConnectedMode } from '../lib/runtime';
+import { fetchPublicInvoice, type PublicInvoice } from '../lib/publicInvoice';
 import { formatCurrency, formatDate, getMonthName, createWhatsAppUrl } from '../lib/billingEngine';
 import { generateReceiptPDF } from '../lib/pdfGenerator';
 import { generatePixEMV } from '../lib/pixEmv';
 import QRCode from 'qrcode';
+import type { Cobranca, Imovel, Inquilino, Profile } from '../types/database';
 import {
   Building2,
   CheckCircle2,
@@ -18,23 +21,121 @@ import {
   ArrowLeft,
   ShieldCheck,
   Zap,
+  Loader2,
 } from 'lucide-react';
 
 export const FaturaPublicaView: React.FC = () => {
-  const { cobrancas, inquilinos, imoveis, profile, routeParams, navigate } = useApp();
+  const {
+    cobrancas,
+    inquilinos,
+    imoveis,
+    profile: demoProfile,
+    routeParams,
+    navigate,
+    user,
+  } = useApp();
+  const connected = isConnectedMode();
+  const token = routeParams.id;
   const [copiedEmv, setCopiedEmv] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+  const [publicInvoice, setPublicInvoice] = useState<PublicInvoice | null>(null);
+  const [isLoadingInvoice, setIsLoadingInvoice] = useState(connected);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Encontra a cobrança pelo ID passado no hash ou seleciona a primeira pendente/atrasada como exemplo
-  const cobrancaId = routeParams.id;
-  const cobranca =
-    cobrancas.find((c) => c.id === cobrancaId) ||
-    cobrancas.find((c) => c.status === 'atrasado') ||
-    cobrancas[0];
+  useEffect(() => {
+    if (!connected) {
+      setIsLoadingInvoice(false);
+      return;
+    }
 
-  const inquilino = cobranca ? inquilinos.find((i) => i.id === cobranca.inquilino_id) : undefined;
-  const imovel = inquilino ? imoveis.find((im) => im.id === inquilino.imovel_id) : undefined;
+    let cancelled = false;
+    setPublicInvoice(null);
+    setIsLoadingInvoice(true);
+    setLoadError(null);
+
+    fetchPublicInvoice(token)
+      .then((data) => {
+        if (!cancelled) setPublicInvoice(data);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setPublicInvoice(null);
+          setLoadError(err instanceof Error ? err.message : 'Erro ao carregar fatura');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingInvoice(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [connected, token]);
+
+  const demoCobranca = cobrancas.find((c) => c.public_token === token || c.id === token);
+  const demoInquilino = demoCobranca
+    ? inquilinos.find((i) => i.id === demoCobranca.inquilino_id)
+    : undefined;
+  const demoImovel = demoInquilino
+    ? imoveis.find((im) => im.id === demoInquilino.imovel_id)
+    : undefined;
+
+  const cobranca: Cobranca | undefined = connected
+    ? publicInvoice
+      ? {
+          ...publicInvoice.cobranca,
+          inquilino_id: '',
+          user_id: '',
+          valor_com_multa: publicInvoice.cobranca.valor_com_multa ?? undefined,
+          data_pagamento: publicInvoice.cobranca.data_pagamento ?? null,
+          link_comprovante: null,
+        }
+      : undefined
+    : demoCobranca;
+
+  const inquilino: Inquilino | undefined = connected
+    ? publicInvoice
+      ? {
+          id: '',
+          user_id: '',
+          imovel_id: '',
+          nome_inquilino: publicInvoice.inquilino.nome_inquilino,
+          whatsapp_inquilino: '',
+          valor_aluguel: publicInvoice.cobranca.valor_original,
+          dia_vencimento: 1,
+          data_inicio_contrato: '',
+          multa_atraso: publicInvoice.inquilino.multa_atraso ?? 2,
+          juros_dia: publicInvoice.inquilino.juros_dia ?? 0.033,
+          ativo: true,
+        }
+      : undefined
+    : demoInquilino;
+
+  const imovel: Imovel | undefined = connected
+    ? publicInvoice
+      ? {
+          id: '',
+          user_id: '',
+          apelido_imovel: publicInvoice.imovel.apelido_imovel,
+          endereco: publicInvoice.imovel.endereco,
+        }
+      : undefined
+    : demoImovel;
+
+  const profile: Profile = connected
+    ? {
+        id: '',
+        email: '',
+        nome: publicInvoice?.locador.nome || 'Locador',
+        whatsapp_dono: publicInvoice?.locador.whatsapp_dono || '',
+        chave_pix_dono: publicInvoice?.locador.chave_pix_dono || '',
+        tipo_chave_pix: 'CPF',
+        cidade_pix: publicInvoice?.locador.cidade_pix || 'GOIANIA',
+        plano: 'ate_3_imoveis',
+        onboarding_concluido: true,
+      }
+    : demoProfile;
 
   const isPago = cobranca?.status === 'pago';
   const isAtrasado = cobranca?.status === 'atrasado';
@@ -69,6 +170,18 @@ export const FaturaPublicaView: React.FC = () => {
     }
   }, [pixEmvPayload]);
 
+  if (isLoadingInvoice) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-3xl max-w-md w-full text-center shadow-lg border border-slate-200">
+          <Loader2 className="w-12 h-12 text-indigo-600 mx-auto mb-3 animate-spin" />
+          <h2 className="text-lg font-bold text-slate-800">Carregando fatura</h2>
+          <p className="text-xs text-slate-500 mt-1">Validando o link seguro da sua cobrança...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!cobranca || !inquilino) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -76,10 +189,12 @@ export const FaturaPublicaView: React.FC = () => {
           <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-3" />
           <h2 className="text-lg font-bold text-slate-800">Fatura não encontrada</h2>
           <p className="text-xs text-slate-500 mt-1 mb-6">
-            O link da fatura pode ter expirado ou o ID é inválido.
+            {loadError
+              ? 'Não foi possível validar este link agora. Tente novamente.'
+              : 'O link da fatura pode ter expirado ou o token é inválido.'}
           </p>
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate(user ? '/dashboard' : '/')}
             className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold"
           >
             Voltar ao Início
@@ -127,7 +242,7 @@ export const FaturaPublicaView: React.FC = () => {
         {/* Botão Voltar para Locador */}
         <div className="mb-4 flex items-center justify-between">
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate(user ? '/dashboard' : '/')}
             className="text-xs font-bold text-slate-600 hover:text-indigo-600 flex items-center gap-1.5 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />

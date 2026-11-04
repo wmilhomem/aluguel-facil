@@ -112,6 +112,7 @@ export function generate12Charges(inquilino: Inquilino, userId: string): Cobranc
       valor_com_multa: status === 'atrasado' ? valorComMulta : undefined,
       status,
       dias_atraso: diffDays > 0 ? diffDays : 0,
+      public_token: createPublicToken(),
       created_at: new Date().toISOString(),
     });
   }
@@ -166,6 +167,32 @@ export function createWhatsAppUrl(phone: string, text: string): string {
 }
 
 /**
+ * Gera um token opaco (UUID v4) para o link público da fatura.
+ * O token não expõe o ID interno da cobrança e pode ser revogado no banco.
+ */
+export function createPublicToken(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = (Math.random() * 16) | 0;
+    const value = char === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
+/**
+ * Monta o link público da fatura usando o token opaco.
+ * Em modo conectado, o token é obrigatório para que a RPC encontre a cobrança.
+ */
+export function buildPublicInvoiceUrl(cobranca: Pick<Cobranca, 'public_token'>): string {
+  if (!cobranca.public_token) return '';
+  const appOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://aluguelfacil.app';
+  return `${appOrigin}/#fatura-${cobranca.public_token}`;
+}
+
+/**
  * Executa a lógica da rotina de cobrança das 08:00
  * Verifica cobranças pendentes e gera a fila de envio
  */
@@ -188,8 +215,6 @@ export function runCronBillingCheck(
 
   const imoveisMap = new Map<string, Imovel>();
   imoveis.forEach((imo) => imoveisMap.set(imo.id, imo));
-
-  const appOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://aluguelfacil.app';
 
   for (const cob of cobrancas) {
     if (cob.status === 'pago') {
@@ -252,7 +277,7 @@ export function runCronBillingCheck(
 
     if (tipoMsg) {
       const templateRaw = templatesMap.get(tipoMsg) || getDefaultTemplateText(tipoMsg);
-      const faturaUrl = `${appOrigin}/#fatura-${cob.id}`;
+      const faturaUrl = buildPublicInvoiceUrl(cob);
 
       const texto = renderTemplate(templateRaw, {
         nome: inquilino.nome_inquilino,
@@ -281,6 +306,7 @@ export function runCronBillingCheck(
         texto_mensagem: texto,
         link_wa: linkWa,
         fatura_url: faturaUrl,
+        fatura_token: cob.public_token,
         horario_agendado: '08:00 (Brasília)',
       });
     }

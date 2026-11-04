@@ -167,7 +167,7 @@ export const WhatsAppQueueCard: React.FC<Props> = ({ item }) => {
 
         {/* Link para Fatura Pública */}
         <button
-          onClick={() => navigate('/fatura', { id: item.cobranca_id })}
+          onClick={() => navigate('/fatura', { id: item.fatura_token })}
           className="w-full text-center py-1.5 text-[11px] font-semibold text-slate-500 hover:text-indigo-600 flex items-center justify-center gap-1 transition-colors"
         >
           <FileText className="w-3 h-3" />

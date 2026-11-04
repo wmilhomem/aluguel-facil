@@ -8,6 +8,7 @@ import {
   createWhatsAppUrl,
   renderTemplate,
   getDefaultTemplateText,
+  buildPublicInvoiceUrl,
 } from '../lib/billingEngine';
 import { generateContractPDF } from '../lib/pdfGenerator';
 import { WhatsAppQueueCard } from '../components/WhatsAppQueueCard';
@@ -87,8 +88,7 @@ export const DashboardView: React.FC = () => {
 
   // Gerador de mensagem do WhatsApp para cobrança individual
   const getWhatsAppMessageForInquilino = (cob: Cobranca, inq: Inquilino, imo?: Imovel) => {
-    const appOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://aluguelfacil.app';
-    const faturaUrl = `${appOrigin}/#fatura-${cob.id}`;
+    const faturaUrl = buildPublicInvoiceUrl(cob);
     const diffDays = getDaysDifference(cob.data_vencimento);
 
     let tipo: 'lembrete_3_dias' | 'vencimento_hoje' | 'atraso_1_dia' | 'atraso_5_dias' = 'vencimento_hoje';
@@ -622,7 +622,7 @@ export const DashboardView: React.FC = () => {
                             {/* Ver Fatura */}
                             {cobrancaAtual && (
                               <button
-                                onClick={() => navigate('/fatura', { id: cobrancaAtual.id })}
+                                onClick={() => navigate('/fatura', { id: cobrancaAtual.public_token })}
                                 title="Ver Fatura Online"
                                 className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors"
                               >

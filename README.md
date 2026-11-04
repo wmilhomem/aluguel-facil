@@ -1,20 +1,49 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Aluguel Fácil
 
-# Run and deploy your AI Studio app
+Sistema de cobrança e gestão de aluguéis para locadores informais.
 
-This contains everything you need to run your app locally.
+## Rodar localmente
 
-View your app in AI Studio: https://ai.studio/apps/82216095-17c5-45bb-bb93-88605fe5a9a2
+Pré-requisitos: Node.js 20+.
 
-## Run Locally
+```powershell
+npm install
+Copy-Item .env.example .env
+npm run dev
+```
 
-**Prerequisites:**  Node.js
+O app abre em `http://localhost:3000`.
 
+## Modos de execução
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- **Demo:** sem `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` configurados, ou com
+  `VITE_DEMO_MODE=true`, o app usa o seed local (Dona Maria Helena).
+- **Conectado:** configure as variáveis do Supabase e `VITE_DEMO_MODE=false`.
+
+## Banco de dados
+
+Banco novo: execute `supabase_schema.sql` no SQL Editor do Supabase.
+
+Banco existente: aplique as migrações de `supabase/migrations/` em ordem.
+
+## Scripts
+
+```powershell
+npm run dev        # servidor de desenvolvimento
+npm run typecheck  # TypeScript sem emitir
+npm run build      # build de produção
+npm run preview    # preview do build
+npm run test:rls   # teste de isolamento entre dois usuários (Supabase real)
+```
+
+Para `test:rls`, defina `SUPABASE_URL`, `SUPABASE_ANON_KEY` e
+`SUPABASE_SERVICE_ROLE_KEY` no ambiente. A chave de serviço nunca deve ir para o
+frontend ou para a Netlify.
+
+## Deploy
+
+- Frontend: Netlify (`https://aluguel.reflexsus.com`).
+- Variáveis públicas: `VITE_APP_URL`, `VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_ANON_KEY`, `VITE_DEMO_MODE` e `VITE_STRIPE_PUBLISHABLE_KEY`.
+- Segredos de Stripe e service role ficam apenas nas Edge Functions/ambiente
+  local.

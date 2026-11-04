@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatCurrency, formatDate, getMonthName, createWhatsAppUrl, renderTemplate, getDefaultTemplateText, getDaysDifference } from '../lib/billingEngine';
+import { formatCurrency, formatDate, getMonthName, createWhatsAppUrl, renderTemplate, getDefaultTemplateText, getDaysDifference, buildPublicInvoiceUrl } from '../lib/billingEngine';
 import { generateReceiptPDF } from '../lib/pdfGenerator';
 import { PaymentModal } from '../components/PaymentModal';
 import { Cobranca, Inquilino, Imovel, StatusCobranca } from '../types/database';
@@ -74,8 +74,7 @@ export const CobrancasView: React.FC = () => {
     const imo = inq ? imoveisMap.get(inq.imovel_id) : undefined;
     if (!inq) return '';
 
-    const appOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://aluguelfacil.app';
-    const faturaUrl = `${appOrigin}/#fatura-${cob.id}`;
+    const faturaUrl = buildPublicInvoiceUrl(cob);
     const valor = cob.valor_com_multa || cob.valor_original;
 
     let tipo = 'vencimento_hoje';
@@ -366,7 +365,7 @@ export const CobrancasView: React.FC = () => {
 
                             {/* Ver Fatura Online */}
                             <button
-                              onClick={() => navigate('/fatura', { id: cob.id })}
+                              onClick={() => navigate('/fatura', { id: cob.public_token })}
                               title="Ver Fatura / Link do Inquilino"
                               className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-slate-100 transition-colors"
                             >

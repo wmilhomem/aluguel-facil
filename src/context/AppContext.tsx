@@ -13,6 +13,7 @@ import {
   runCronBillingCheck,
   getDefaultTemplateText,
   calculateUpdatedAmount,
+  createPublicToken,
 } from '../lib/billingEngine';
 import { supabase } from '../lib/supabase';
 import { isConnectedMode } from '../lib/runtime';
@@ -147,6 +148,10 @@ function mergeById<T extends { id: string }>(current: T[], incoming: T[]): T[] {
 
 function sortByDueDate(rows: Cobranca[]): Cobranca[] {
   return [...rows].sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento));
+}
+
+function ensurePublicTokens(rows: Cobranca[]): Cobranca[] {
+  return rows.map((row) => (row.public_token ? row : { ...row, public_token: createPublicToken() }));
 }
 
 // Dados padrão iniciais (Locador informal modelo)
@@ -294,6 +299,7 @@ function getInitialSeedData() {
       valor_original: 850.0,
       status: 'pendente',
       dias_atraso: 0,
+      public_token: '11111111-1111-4111-8111-111111111111',
       created_at: new Date().toISOString(),
     },
     {
@@ -305,6 +311,7 @@ function getInitialSeedData() {
       valor_original: 1100.0,
       status: 'pendente',
       dias_atraso: 0,
+      public_token: '22222222-2222-4222-8222-222222222222',
       created_at: new Date().toISOString(),
     },
     {
@@ -317,6 +324,7 @@ function getInitialSeedData() {
       valor_com_multa: calcAtraso.valorFinal,
       status: 'atrasado',
       dias_atraso: 2,
+      public_token: '33333333-3333-4333-8333-333333333333',
       created_at: new Date().toISOString(),
     },
     {
@@ -330,6 +338,7 @@ function getInitialSeedData() {
       data_pagamento: strDue4,
       link_comprovante: 'https://exemplo.com/comprovante_pix.png',
       dias_atraso: 0,
+      public_token: '44444444-4444-4444-8444-444444444444',
       created_at: new Date().toISOString(),
     },
   ];
@@ -500,7 +509,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setProfile(parsedProfile);
       setImoveis(JSON.parse(localStorage.getItem(STORAGE_KEYS.IMOVEIS) || '[]'));
       setInquilinos(JSON.parse(localStorage.getItem(STORAGE_KEYS.INQUILINOS) || '[]'));
-      setCobrancas(JSON.parse(localStorage.getItem(STORAGE_KEYS.COBRANCAS) || '[]'));
+      setCobrancas(ensurePublicTokens(JSON.parse(localStorage.getItem(STORAGE_KEYS.COBRANCAS) || '[]')));
       setTemplates(JSON.parse(localStorage.getItem(STORAGE_KEYS.TEMPLATES) || '[]'));
       return;
     }

@@ -13,7 +13,8 @@
 ## Decisões pendentes
 
 1. Stripe apenas cartão ou fluxo separado para Pix/Boleto.
-2. Link público da fatura por UUID ou por `public_token`.
+2. ~~Link público da fatura por UUID ou por `public_token`.~~ **Resolvido na Fase 2:**
+   link por `public_token` UUID opaco, servido pela RPC `get_public_invoice`.
 3. Demo via `VITE_DEMO_MODE` ou build separado.
 4. Texto jurídico atual ou revisão especializada.
 5. Realtime agora ou refetch on focus.
@@ -27,7 +28,7 @@
 
 **Aceite:** `npm ci`, `npm run typecheck` e `npm run build` passam em ambiente limpo.
 
-## Fase 1 — Camada de dados real
+## Fase 1 — Camada de dados real (concluída)
 
 - Repositórios por entidade (`profiles`, `imoveis`, `inquilinos`, `cobrancas`,
   `mensagens_template`).
@@ -42,12 +43,17 @@
 **Aceite:** usuário autenticado lê exatamente o que gravou; onboarding cria perfil,
 imóvel, inquilino e 12 cobranças de forma atômica; demo continua funcionando.
 
-## Fase 2 — Segurança e fatura pública
+## Fase 2 — Segurança e fatura pública (concluída)
 
 - RLS por `auth.uid()` em todas as tabelas.
 - Remover `USING (true)` de `cobrancas`.
 - Fatura pública via RPC/token seguro, sem fallback local.
 - Testes de isolamento entre dois usuários.
+- `public_token` UUID opaco por cobrança; a RPC `get_public_invoice` retorna
+  somente os campos necessários ao pagamento (sem `user_id`, e-mail, CPF ou
+  WhatsApp do inquilino).
+- O papel `anon` não lê tabelas diretamente; só executa a RPC da fatura.
+- Script `npm run test:rls` valida isolamento entre dois usuários reais.
 
 **Aceite:** usuário A não acessa dados de B por API nem por URL.
 

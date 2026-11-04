@@ -60,6 +60,7 @@ export interface Cobranca {
   data_pagamento?: string | null;
   link_comprovante?: string | null;
   dias_atraso: number;
+  public_token: string;
   created_at?: string;
 }
 
@@ -85,6 +86,7 @@ export interface FilaEnvioItem {
   texto_mensagem: string;
   link_wa: string;
   fatura_url: string;
+  fatura_token: string;
   horario_agendado: string;
   enviado?: boolean;
 }

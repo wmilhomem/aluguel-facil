@@ -21,8 +21,14 @@ import { Toast } from './components/Toast';
 const MainRouter: React.FC = () => {
   const { currentRoute, user, profile, toast, hideToast } = useApp();
 
-  // Se o usuário estiver autenticado e ainda não tiver concluído o onboarding, redireciona para onboarding
-  if (user && !profile.onboarding_concluido && currentRoute !== '/onboarding') {
+  // Se o usuário estiver autenticado e ainda não tiver concluído o onboarding, redireciona para onboarding.
+  // A fatura pública é acessível sem sessão e não pode ser bloqueada por esse guard.
+  if (
+    user &&
+    !profile.onboarding_concluido &&
+    currentRoute !== '/onboarding' &&
+    currentRoute !== '/fatura'
+  ) {
     return <OnboardingView />;
   }
 
