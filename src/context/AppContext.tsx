@@ -121,7 +121,28 @@ interface AppContextType {
       dia_vencimento: number;
     }
   ) => Promise<void>;
-}
+
+  // Stripe Actions
+  const checkoutStripe = async (priceId?: string): Promise<{ url?: string; error?: string }> => {
+    const user = user;
+    if (!user) return { error: 'Usuário não autenticado.' };
+
+    const price = priceId || (profile.plano_nome === 'intermediario' ? import.meta.env.VITE_STRIPE_PRICE_INTERMEDIARIO : import.meta.env.VITE_STRIPE_PRICE_INDIVIDUAL);
+    if (!price) return { error: 'Preço Stripe não configurado.' };
+
+    const userEmail = profile.email || '';
+    return await stripe.createStripeCheckoutSession({ priceId: price, userId: user.id, userEmail });
+  };
+
+  const openStripePortal = async (): Promise<{ url?: string; error?: string }> => {
+    const user = user;
+    if (!user) return { error: 'Usuário não autenticado.' };
+
+    const customerId = profile.stripe_customer_id;
+    if (!customerId) return { error: 'Cliente Stripe não encontrado. Complete o checkout primeiro.' };
+
+    return await stripe.createStripePortalSession({ customerId, userId: user.id });
+  };
 
 const AppContext = createContext<AppContextType | null>(null);
 
@@ -1109,7 +1130,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Disparo manual do Cron diário das 08:00
-  const runCronManual = (): { count: number; items: FilaEnvioItem[] } => {
+  const runCronManual = async (): Promise<{ count: number; items: FilaEnvioItem[] }> => {
     const now = new Date();
     const timeFormatted = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const dateFormatted = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
@@ -1494,6 +1515,8 @@ login,
         resendConfirmation: resendConfirmation,
         updatePassword: updatePassword,
         completeOnboarding,
+        checkoutStripe,
+        openStripePortal,
       }}
     >
       {children}

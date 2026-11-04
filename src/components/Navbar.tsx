@@ -34,9 +34,9 @@ export const Navbar: React.FC = () => {
   const isAuth = !!user;
   const isPublicPage = (!isAuth && currentRoute === '/') || currentRoute === '/landing' || currentRoute === '/login' || currentRoute === '/cadastro' || currentRoute === '/fatura' || currentRoute === '/confirmar-email' || currentRoute === '/recuperar-senha' || currentRoute === '/redefinir-senha';
 
-  const handleCronClick = () => {
+  const handleCronClick = async () => {
     setCronRunning(true);
-    runCronManual();
+    await runCronManual();
     setTimeout(() => setCronRunning(false), 800);
   };
 
