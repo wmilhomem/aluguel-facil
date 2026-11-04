@@ -3,10 +3,11 @@
 > Documento de referência do handover. Consolida o relatório recebido e a auditoria
 > realizada diretamente no repositório em 03/11/2026.
 >
-> **Status em 03/11/2026:** Fase 1 (camada de dados real) e Fase 2 (RLS e fatura
-> pública por token) concluídas. Os itens abaixo permanecem como registro do
-> estado encontrado na auditoria inicial; as correções aplicadas estão descritas
-> em `docs/PLANO_LINHA_DE_BASE.md` e `docs/FASE_2_SEGURANCA_E_FATURA.md`.
+> **Status em 04/11/2026:** Fase 1 (camada de dados real) e Fase 2 (RLS e fatura
+> pública por token) concluídas e validadas contra o Supabase real. Os itens
+> abaixo permanecem como registro do estado encontrado na auditoria inicial; as
+> correções aplicadas estão descritas em `docs/PLANO_LINHA_DE_BASE.md` e
+> `docs/FASE_2_SEGURANCA_E_FATURA.md`.
 
 ## 1. Contexto do produto
 
@@ -15,8 +16,8 @@
 - Backend previsto: Supabase (Postgres, Auth, Edge Functions).
 - Pagamentos: Stripe.
 - Hospedagem do frontend: Netlify — `https://aluguel.reflexsus.com`.
-- Banco: Supabase (conta criada, schema ainda não aplicado).
-- Credenciais serão fornecidas em momento oportuno.
+- Banco: Supabase (schema aplicado em 04/11/2026; RLS validado com `npm run test:rls`).
+- Credenciais configuradas no ambiente local; segredos não versionados.
 - Restrição de produto: **não alterar design, componentes ou cores** sem autorização.
 
 ## 2. Estado real do repositório

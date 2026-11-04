@@ -44,6 +44,16 @@ npm run test:rls
 A `SUPABASE_SERVICE_ROLE_KEY` é usada apenas para criar/remover os usuários de
 teste e nunca deve ser exposta no frontend ou na Netlify.
 
+## Validação executada
+
+Em 04/11/2026, o `supabase_schema.sql` foi aplicado no projeto Supabase e o
+teste `npm run test:rls` passou com 24 verificações, cobrindo:
+
+- isolamento de leitura, update e delete entre dois usuários;
+- bloqueio de insert forjado com `user_id` de outro usuário;
+- ausência de leitura direta de `cobrancas` pelo papel `anon`;
+- RPC pública por token, token inválido e retorno mínimo sem dados sensíveis.
+
 ## Critérios de aceite
 
 - Usuário A não lista, lê, altera nem exclui dados de B.
@@ -51,4 +61,4 @@ teste e nunca deve ser exposta no frontend ou na Netlify.
 - Anônimo não lê `cobrancas` diretamente.
 - Anônimo lê somente a fatura correspondente ao token informado.
 - A fatura pública não expõe `user_id`, e-mail, CPF nem WhatsApp do inquilino.
-- `npm run typecheck` e `npm run build` passam.
+- `npm run test:rls`, `npm run typecheck` e `npm run build` passam.

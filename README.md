@@ -26,6 +26,9 @@ Banco novo: execute `supabase_schema.sql` no SQL Editor do Supabase.
 
 Banco existente: aplique as migrações de `supabase/migrations/` em ordem.
 
+Validação em 04/11/2026: schema aplicado no Supabase e `npm run test:rls` passou
+com 24 verificações de isolamento.
+
 ## Scripts
 
 ```powershell

@@ -7,7 +7,7 @@
 
 - Não alterar layout, componentes visuais, tipografia ou paleta.
 - Netlify: `https://aluguel.reflexsus.com`.
-- Supabase: schema será aplicado quando as credenciais forem fornecidas.
+- Supabase: schema aplicado em 04/11/2026; RLS e fatura pública validados com `npm run test:rls`.
 - Modo demo deve continuar funcional até a virada para produção.
 
 ## Decisões pendentes
@@ -53,7 +53,7 @@ imóvel, inquilino e 12 cobranças de forma atômica; demo continua funcionando.
   somente os campos necessários ao pagamento (sem `user_id`, e-mail, CPF ou
   WhatsApp do inquilino).
 - O papel `anon` não lê tabelas diretamente; só executa a RPC da fatura.
-- Script `npm run test:rls` valida isolamento entre dois usuários reais.
+- Script `npm run test:rls` valida isolamento entre dois usuários reais; executado com sucesso em 04/11/2026.
 
 **Aceite:** usuário A não acessa dados de B por API nem por URL.
 
