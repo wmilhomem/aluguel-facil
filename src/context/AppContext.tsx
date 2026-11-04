@@ -14,7 +14,16 @@ import {
   getDefaultTemplateText,
   calculateUpdatedAmount,
 } from '../lib/billingEngine';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
+import { isConnectedMode } from '../lib/runtime';
+import {
+  cobrancasRepo,
+  imoveisRepo,
+  inquilinosRepo,
+  onboardingRepo,
+  profilesRepo,
+  templatesRepo,
+} from '../lib/repositories';
 import confetti from 'canvas-confetti';
 
 import { ToastData } from '../components/Toast';
@@ -111,6 +120,34 @@ const STORAGE_KEYS = {
   TEMPLATES: 'aluguel_facil_templates',
   CRON_LAST_RUN: 'aluguel_facil_cron_last_run',
 };
+
+function createEmptyProfile(): Profile {
+  return {
+    id: '',
+    email: '',
+    nome: '',
+    whatsapp_dono: '',
+    chave_pix_dono: '',
+    tipo_chave_pix: 'CPF',
+    plano: 'ate_3_imoveis',
+    onboarding_concluido: false,
+  };
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return 'Erro inesperado. Tente novamente.';
+}
+
+function mergeById<T extends { id: string }>(current: T[], incoming: T[]): T[] {
+  const map = new Map(current.map((item) => [item.id, item]));
+  incoming.forEach((item) => map.set(item.id, item));
+  return Array.from(map.values());
+}
+
+function sortByDueDate(rows: Cobranca[]): Cobranca[] {
+  return [...rows].sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento));
+}
 
 // Dados padrão iniciais (Locador informal modelo)
 function getInitialSeedData() {
@@ -360,16 +397,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // States
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
-  const [profile, setProfile] = useState<Profile>({
-    id: '',
-    email: '',
-    nome: '',
-    whatsapp_dono: '',
-    chave_pix_dono: '',
-    tipo_chave_pix: 'CPF',
-    plano: 'ate_3_imoveis',
-    onboarding_concluido: false,
-  });
+  const [profile, setProfile] = useState<Profile>(createEmptyProfile);
   const [imoveis, setImoveis] = useState<Imovel[]>([]);
   const [inquilinos, setInquilinos] = useState<Inquilino[]>([]);
   const [cobrancas, setCobrancas] = useState<Cobranca[]>([]);
@@ -386,6 +414,113 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const hideToast = () => setToast(null);
+
+  const clearSessionState = () => {
+    setUser(null);
+    setProfile(createEmptyProfile());
+    setImoveis([]);
+    setInquilinos([]);
+    setCobrancas([]);
+    setTemplates([]);
+    Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
+  };
+
+  async function hydrateFromSupabase(sbUser: {
+    id: string;
+    email?: string;
+    user_metadata?: Record<string, unknown>;
+  }): Promise<Profile> {
+    const userObj = { id: sbUser.id, email: sbUser.email || '' };
+    setUser(userObj);
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userObj));
+
+    let loadedProfile = await profilesRepo.getProfile(sbUser.id);
+
+    // O trigger do Supabase pode levar alguns instantes para criar o perfil.
+    for (let attempt = 0; attempt < 3 && !loadedProfile; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      loadedProfile = await profilesRepo.getProfile(sbUser.id);
+    }
+
+    const meta = sbUser.user_metadata || {};
+    const fallbackName =
+      (typeof meta.full_name === 'string' && meta.full_name) ||
+      (typeof meta.name === 'string' && meta.name) ||
+      sbUser.email?.split('@')[0] ||
+      'Locador';
+
+    if (!loadedProfile) {
+      loadedProfile = await profilesRepo.ensureProfile(
+        sbUser.id,
+        sbUser.email || '',
+        fallbackName,
+      );
+    }
+
+    const [loadedImoveis, loadedInquilinos, loadedCobrancas, loadedTemplates] =
+      await Promise.all([
+        imoveisRepo.listImoveis(sbUser.id),
+        inquilinosRepo.listInquilinos(sbUser.id),
+        cobrancasRepo.listCobrancas(sbUser.id),
+        templatesRepo.listTemplates(sbUser.id),
+      ]);
+
+    let finalTemplates = loadedTemplates;
+    if (finalTemplates.length === 0) {
+      await templatesRepo.ensureDefaultTemplates(sbUser.id);
+      finalTemplates = await templatesRepo.listTemplates(sbUser.id);
+    }
+
+    setProfile(loadedProfile);
+    setImoveis(loadedImoveis);
+    setInquilinos(loadedInquilinos);
+    setCobrancas(loadedCobrancas);
+    setTemplates(finalTemplates);
+
+    return loadedProfile;
+  }
+
+  function loadDemoData() {
+    const savedUserStr = localStorage.getItem(STORAGE_KEYS.USER);
+    const savedProfileStr = localStorage.getItem(STORAGE_KEYS.PROFILE);
+
+    if (savedProfileStr && savedUserStr) {
+      const parsedProfile = JSON.parse(savedProfileStr);
+      if (!parsedProfile.trial_ends_at) {
+        parsedProfile.trial_ends_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      }
+      if (
+        parsedProfile.plano_status !== 'inativo' &&
+        parsedProfile.plano_status !== 'cancelado' &&
+        !parsedProfile.stripe_subscription_id
+      ) {
+        parsedProfile.plano_status = 'trial';
+      }
+      setUser(JSON.parse(savedUserStr));
+      setProfile(parsedProfile);
+      setImoveis(JSON.parse(localStorage.getItem(STORAGE_KEYS.IMOVEIS) || '[]'));
+      setInquilinos(JSON.parse(localStorage.getItem(STORAGE_KEYS.INQUILINOS) || '[]'));
+      setCobrancas(JSON.parse(localStorage.getItem(STORAGE_KEYS.COBRANCAS) || '[]'));
+      setTemplates(JSON.parse(localStorage.getItem(STORAGE_KEYS.TEMPLATES) || '[]'));
+      return;
+    }
+
+    // Carrega dados iniciais ricos de demonstração
+    const seed = getInitialSeedData();
+    setUser(seed.user);
+    setProfile(seed.profile);
+    setImoveis(seed.imoveis);
+    setInquilinos(seed.inquilinos);
+    setCobrancas(seed.cobrancas);
+    setTemplates(seed.templates);
+
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(seed.user));
+    localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(seed.profile));
+    localStorage.setItem(STORAGE_KEYS.IMOVEIS, JSON.stringify(seed.imoveis));
+    localStorage.setItem(STORAGE_KEYS.INQUILINOS, JSON.stringify(seed.inquilinos));
+    localStorage.setItem(STORAGE_KEYS.COBRANCAS, JSON.stringify(seed.cobrancas));
+    localStorage.setItem(STORAGE_KEYS.TEMPLATES, JSON.stringify(seed.templates));
+  }
 
   // Listen to hash changes for deep linking (e.g. #fatura-123, #planos, #cobrancas)
   useEffect(() => {
@@ -418,95 +553,66 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     const initApp = async () => {
       try {
-        const isConfigured = isSupabaseConfigured();
-        setSupabaseConnected(isConfigured);
+        const connected = isConnectedMode();
+        setSupabaseConnected(connected);
 
-        const savedUserStr = localStorage.getItem(STORAGE_KEYS.USER);
-        const savedProfileStr = localStorage.getItem(STORAGE_KEYS.PROFILE);
-
-        if (savedProfileStr && savedUserStr) {
-          const parsedProfile = JSON.parse(savedProfileStr);
-          if (!parsedProfile.trial_ends_at) {
-            parsedProfile.trial_ends_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-          }
-          if (parsedProfile.plano_status !== 'inativo' && parsedProfile.plano_status !== 'cancelado' && !parsedProfile.stripe_subscription_id) {
-            parsedProfile.plano_status = 'trial';
-          }
-          setUser(JSON.parse(savedUserStr));
-          setProfile(parsedProfile);
-          setImoveis(JSON.parse(localStorage.getItem(STORAGE_KEYS.IMOVEIS) || '[]'));
-          setInquilinos(JSON.parse(localStorage.getItem(STORAGE_KEYS.INQUILINOS) || '[]'));
-          setCobrancas(JSON.parse(localStorage.getItem(STORAGE_KEYS.COBRANCAS) || '[]'));
-          setTemplates(JSON.parse(localStorage.getItem(STORAGE_KEYS.TEMPLATES) || '[]'));
+        if (!connected) {
+          loadDemoData();
         } else {
-          // Carrega dados iniciais ricos de demonstração
-          const seed = getInitialSeedData();
-          setUser(seed.user);
-          setProfile(seed.profile);
-          setImoveis(seed.imoveis);
-          setInquilinos(seed.inquilinos);
-          setCobrancas(seed.cobrancas);
-          setTemplates(seed.templates);
+          const { data: sessionData, error } = await supabase.auth.getSession();
+          if (error) {
+            showToast('Falha ao recuperar sessão', error.message, 'error');
+          }
 
-          localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(seed.user));
-          localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(seed.profile));
-          localStorage.setItem(STORAGE_KEYS.IMOVEIS, JSON.stringify(seed.imoveis));
-          localStorage.setItem(STORAGE_KEYS.INQUILINOS, JSON.stringify(seed.inquilinos));
-          localStorage.setItem(STORAGE_KEYS.COBRANCAS, JSON.stringify(seed.cobrancas));
-          localStorage.setItem(STORAGE_KEYS.TEMPLATES, JSON.stringify(seed.templates));
+          if (sessionData?.session?.user) {
+            await hydrateFromSupabase(sessionData.session.user);
+          } else {
+            setUser(null);
+            setProfile(createEmptyProfile());
+            setImoveis([]);
+            setInquilinos([]);
+            setCobrancas([]);
+            setTemplates([]);
+          }
         }
 
         const lastRun = localStorage.getItem(STORAGE_KEYS.CRON_LAST_RUN);
         if (lastRun) {
           setCronLastRun(lastRun);
         }
-
-        // Se conectado ao Supabase, verifica se há sessão ativa (inclusive após OAuth do Google)
-        if (isConfigured) {
-          try {
-            const { data: sessionData } = await supabase.auth.getSession();
-            if (sessionData?.session?.user) {
-              const sbUser = sessionData.session.user;
-              setUser({ id: sbUser.id, email: sbUser.email || '' });
-            }
-          } catch (e) {
-            console.warn('Supabase session fetch:', e);
-          }
-        }
       } catch (err) {
         console.error('Erro na inicialização:', err);
+        showToast('Falha ao carregar dados', getErrorMessage(err), 'error');
       } finally {
         setIsLoading(false);
       }
     };
 
-    initApp();
+    void initApp();
+
+    if (!isConnectedMode()) {
+      return;
+    }
 
     // Listener para eventos de autenticação Supabase (incluindo retorno de OAuth Google)
-    const { data: authSub } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const sbUser = session.user;
-        const userObj = { id: sbUser.id, email: sbUser.email || '' };
-        setUser(userObj);
-        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userObj));
+    const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        clearSessionState();
+        return;
+      }
 
-        // Se for login recém efetuado via Google, atualiza nome do perfil se vazio
-        const meta = sbUser.user_metadata || {};
-        const googleName = meta.full_name || meta.name || sbUser.email?.split('@')[0] || 'Locador';
-        setProfile((prev) => {
-          const updated = {
-            ...prev,
-            id: sbUser.id,
-            email: sbUser.email || prev.email,
-            nome: prev.nome && prev.nome !== 'Dona Maria' ? prev.nome : googleName,
-          };
-          localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(updated));
-          return updated;
-        });
+      if (!session?.user) return;
 
-        if (window.location.hash.startsWith('#access_token') || event === 'SIGNED_IN') {
-          navigate('/dashboard');
-        }
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        void hydrateFromSupabase(session.user)
+          .then((loadedProfile) => {
+            if (event === 'SIGNED_IN') {
+              navigate(loadedProfile.onboarding_concluido ? '/dashboard' : '/onboarding');
+            }
+          })
+          .catch((err) => {
+            showToast('Falha ao carregar sua conta', getErrorMessage(err), 'error');
+          });
       }
     });
 
@@ -515,7 +621,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
   }, []);
 
-  // Sync state changes with localStorage
+  // Sync state changes with localStorage (cache local; o banco é a fonte em modo conectado)
   useEffect(() => {
     if (!isLoading && profile.id) {
       localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
@@ -583,7 +689,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     cobrancas.forEach((c) => {
       const isCurrentMonth = c.mes_referencia.startsWith(currentMonthKey) || c.data_vencimento.startsWith(currentMonthKey);
-      
+
       // Consideramos as cobranças do mês corrente ou atrasadas acumuladas
       if (isCurrentMonth || c.status === 'atrasado') {
         const val = c.valor_com_multa || c.valor_original;
@@ -621,6 +727,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // CRUD Imóveis
   const addImovel = async (data: Omit<Imovel, 'id' | 'user_id' | 'created_at'>): Promise<Imovel> => {
+    if (isConnectedMode()) {
+      if (!profile.id) {
+        const error = new Error('Sessão ainda não carregada. Tente novamente.');
+        showToast('Falha ao salvar imóvel', error.message, 'error');
+        throw error;
+      }
+
+      try {
+        const created = await imoveisRepo.createImovel(profile.id, {
+          apelido_imovel: data.apelido_imovel,
+          endereco: data.endereco,
+        });
+        setImoveis((prev) => [...prev, created]);
+        return created;
+      } catch (err) {
+        showToast('Falha ao salvar imóvel', getErrorMessage(err), 'error');
+        throw err;
+      }
+    }
+
     const newImovel: Imovel = {
       id: `imo_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       user_id: profile.id || user?.id || 'usr_local',
@@ -630,49 +756,86 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     setImoveis((prev) => [...prev, newImovel]);
-
-    if (supabaseConnected) {
-      try {
-        await supabase.from('imoveis').insert([newImovel]);
-      } catch (e) {
-        console.warn('Supabase sync notice:', e);
-      }
-    }
-
     return newImovel;
   };
 
   const updateImovel = async (id: string, data: Partial<Imovel>): Promise<void> => {
-    setImoveis((prev) => prev.map((item) => (item.id === id ? { ...item, ...data } : item)));
-    if (supabaseConnected) {
+    if (isConnectedMode()) {
       try {
-        await supabase.from('imoveis').update(data).eq('id', id);
-      } catch (e) {
-        console.warn('Supabase sync notice:', e);
+        const updates: imoveisRepo.ImovelUpdates = {};
+        if (data.apelido_imovel !== undefined) updates.apelido_imovel = data.apelido_imovel;
+        if (data.endereco !== undefined) updates.endereco = data.endereco;
+        if (Object.keys(updates).length === 0) return;
+
+        const updated = await imoveisRepo.updateImovel(id, updates);
+        setImoveis((prev) => prev.map((item) => (item.id === id ? updated : item)));
+      } catch (err) {
+        showToast('Falha ao atualizar imóvel', getErrorMessage(err), 'error');
       }
+      return;
     }
+
+    setImoveis((prev) => prev.map((item) => (item.id === id ? { ...item, ...data } : item)));
   };
 
   const deleteImovel = async (id: string): Promise<void> => {
+    if (isConnectedMode()) {
+      try {
+        await imoveisRepo.deleteImovel(id);
+      } catch (err) {
+        showToast('Falha ao excluir imóvel', getErrorMessage(err), 'error');
+        return;
+      }
+    }
+
     setImoveis((prev) => prev.filter((item) => item.id !== id));
-    // Remove também inquilinos associados
+    // Remove também inquilinos associados (cascade no banco)
     const removedInqIds = inquilinos.filter((inq) => inq.imovel_id === id).map((i) => i.id);
     setInquilinos((prev) => prev.filter((inq) => inq.imovel_id !== id));
     setCobrancas((prev) => prev.filter((cob) => !removedInqIds.includes(cob.inquilino_id)));
-
-    if (supabaseConnected) {
-      try {
-        await supabase.from('imoveis').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Supabase sync notice:', e);
-      }
-    }
   };
 
   // CRUD Inquilinos & Geração Automática de 12 Cobranças
   const addInquilino = async (
     data: Omit<Inquilino, 'id' | 'user_id' | 'created_at'>
   ): Promise<Inquilino> => {
+    if (isConnectedMode()) {
+      if (!profile.id) {
+        const error = new Error('Sessão ainda não carregada. Tente novamente.');
+        showToast('Falha ao salvar inquilino', error.message, 'error');
+        throw error;
+      }
+
+      let created: Inquilino | null = null;
+      try {
+        created = await inquilinosRepo.createInquilino(profile.id, data);
+        const draftCharges = generate12Charges(created, profile.id);
+        const chargeRows = draftCharges.map(({ id: _id, created_at: _createdAt, ...row }) => row);
+        const insertedCharges = await cobrancasRepo.createManyCobrancas(chargeRows);
+
+        setInquilinos((prev) => [...prev, created as Inquilino]);
+        setCobrancas((prev) => sortByDueDate([...prev, ...insertedCharges]));
+      } catch (err) {
+        if (created) {
+          await inquilinosRepo.deleteInquilino(created.id).catch(() => undefined);
+        }
+        showToast('Falha ao salvar inquilino', getErrorMessage(err), 'error');
+        throw err;
+      }
+
+      try {
+        confetti({
+          particleCount: 80,
+          spread: 60,
+          origin: { y: 0.7 },
+        });
+      } catch {
+        // Ignora erro se canvas não estiver pronto
+      }
+
+      return created;
+    }
+
     const userId = profile.id || user?.id || 'usr_local';
     const newInquilino: Inquilino = {
       id: `inq_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -698,40 +861,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Ignora erro se canvas não estiver pronto
     }
 
-    if (supabaseConnected) {
-      try {
-        await supabase.from('inquilinos').insert([newInquilino]);
-        await supabase.from('cobrancas').insert(newCharges);
-      } catch (e) {
-        console.warn('Supabase sync notice:', e);
-      }
-    }
-
     return newInquilino;
   };
 
   const updateInquilino = async (id: string, data: Partial<Inquilino>): Promise<void> => {
-    setInquilinos((prev) => prev.map((inq) => (inq.id === id ? { ...inq, ...data } : inq)));
-    if (supabaseConnected) {
+    if (isConnectedMode()) {
       try {
-        await supabase.from('inquilinos').update(data).eq('id', id);
-      } catch (e) {
-        console.warn('Supabase sync notice:', e);
+        const { id: _id, user_id: _userId, created_at: _createdAt, ...updates } = data;
+        if (Object.keys(updates).length === 0) return;
+
+        const updated = await inquilinosRepo.updateInquilino(id, updates);
+        setInquilinos((prev) => prev.map((inq) => (inq.id === id ? updated : inq)));
+      } catch (err) {
+        showToast('Falha ao atualizar inquilino', getErrorMessage(err), 'error');
       }
+      return;
     }
+
+    setInquilinos((prev) => prev.map((inq) => (inq.id === id ? { ...inq, ...data } : inq)));
   };
 
   const deleteInquilino = async (id: string): Promise<void> => {
-    setInquilinos((prev) => prev.filter((inq) => inq.id !== id));
-    setCobrancas((prev) => prev.filter((cob) => cob.inquilino_id !== id));
-
-    if (supabaseConnected) {
+    if (isConnectedMode()) {
       try {
-        await supabase.from('inquilinos').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Supabase sync notice:', e);
+        await inquilinosRepo.deleteInquilino(id);
+      } catch (err) {
+        showToast('Falha ao excluir inquilino', getErrorMessage(err), 'error');
+        return;
       }
     }
+
+    setInquilinos((prev) => prev.filter((inq) => inq.id !== id));
+    setCobrancas((prev) => prev.filter((cob) => cob.inquilino_id !== id));
   };
 
   // Cobranças: Marcar como pago
@@ -741,20 +902,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     linkComprovante?: string
   ): Promise<void> => {
     const dataEfetiva = dataPagamento || new Date().toISOString().split('T')[0];
+    const existing = cobrancas.find((c) => c.id === cobrancaId);
+    const link = linkComprovante || existing?.link_comprovante || null;
 
-    setCobrancas((prev) =>
-      prev.map((c) =>
-        c.id === cobrancaId
-          ? {
-              ...c,
-              status: 'pago',
-              data_pagamento: dataEfetiva,
-              link_comprovante: linkComprovante || c.link_comprovante || null,
-              dias_atraso: 0,
-            }
-          : c
-      )
-    );
+    if (isConnectedMode()) {
+      try {
+        const updated = await cobrancasRepo.markCobrancaPaid(cobrancaId, dataEfetiva, link);
+        setCobrancas((prev) => prev.map((c) => (c.id === cobrancaId ? updated : c)));
+      } catch (err) {
+        showToast('Falha ao registrar pagamento', getErrorMessage(err), 'error');
+        return;
+      }
+    } else {
+      setCobrancas((prev) =>
+        prev.map((c) =>
+          c.id === cobrancaId
+            ? {
+                ...c,
+                status: 'pago',
+                data_pagamento: dataEfetiva,
+                link_comprovante: link,
+                dias_atraso: 0,
+              }
+            : c
+        )
+      );
+    }
 
     // Efeito de sucesso visual
     try {
@@ -771,47 +944,64 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       `Aluguel marcado como PAGO na data ${dia}/${mes}/${ano}. Recibo disponível em PDF.`,
       'success'
     );
-
-    if (supabaseConnected) {
-      try {
-        await supabase
-          .from('cobrancas')
-          .update({
-            status: 'pago',
-            data_pagamento: dataEfetiva,
-            link_comprovante: linkComprovante || null,
-          })
-          .eq('id', cobrancaId);
-      } catch (e) {
-        console.warn('Supabase sync notice:', e);
-      }
-    }
   };
 
   const deleteCobranca = async (id: string): Promise<void> => {
-    setCobrancas((prev) => prev.filter((c) => c.id !== id));
-    if (supabaseConnected) {
+    if (isConnectedMode()) {
       try {
-        await supabase.from('cobrancas').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Supabase sync notice:', e);
+        await cobrancasRepo.deleteCobranca(id);
+      } catch (err) {
+        showToast('Falha ao excluir cobrança', getErrorMessage(err), 'error');
+        return;
       }
     }
+
+    setCobrancas((prev) => prev.filter((c) => c.id !== id));
   };
 
   // Perfil e Configurações
   const updateProfile = async (data: Partial<Profile>): Promise<void> => {
-    setProfile((prev) => ({ ...prev, ...data }));
-    if (supabaseConnected && profile.id) {
-      try {
-        await supabase.from('profiles').update(data).eq('id', profile.id);
-      } catch (e) {
-        console.warn('Supabase sync notice:', e);
+    if (isConnectedMode()) {
+      if (!profile.id) {
+        showToast('Falha ao atualizar perfil', 'Sessão ainda não carregada.', 'error');
+        return;
       }
+
+      try {
+        const { id: _id, created_at: _createdAt, ...updates } = data;
+        if (Object.keys(updates).length === 0) return;
+
+        const updated = await profilesRepo.updateProfile(profile.id, updates);
+        setProfile(updated);
+      } catch (err) {
+        showToast('Falha ao atualizar perfil', getErrorMessage(err), 'error');
+      }
+      return;
     }
+
+    setProfile((prev) => ({ ...prev, ...data }));
   };
 
   const updateTemplate = async (tipo: TipoMensagem, texto: string): Promise<void> => {
+    if (isConnectedMode()) {
+      if (!profile.id) {
+        showToast('Falha ao salvar template', 'Sessão ainda não carregada.', 'error');
+        return;
+      }
+
+      try {
+        const updated = await templatesRepo.upsertTemplate(profile.id, tipo, texto);
+        setTemplates((prev) => {
+          const exists = prev.some((t) => t.tipo === tipo);
+          if (exists) return prev.map((t) => (t.tipo === tipo ? updated : t));
+          return [...prev, updated];
+        });
+      } catch (err) {
+        showToast('Falha ao salvar template', getErrorMessage(err), 'error');
+      }
+      return;
+    }
+
     setTemplates((prev) => {
       const exists = prev.some((t) => t.tipo === tipo);
       if (exists) {
@@ -827,16 +1017,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         },
       ];
     });
-
-    if (supabaseConnected && profile.id) {
-      try {
-        await supabase
-          .from('mensagens_template')
-          .upsert([{ user_id: profile.id, tipo, texto }], { onConflict: 'user_id,tipo' });
-      } catch (e) {
-        console.warn('Supabase sync notice:', e);
-      }
-    }
   };
 
   // Disparo manual do Cron diário das 08:00
@@ -851,6 +1031,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Re-executa verificação
     const res = runCronBillingCheck(cobrancas, inquilinos, imoveis, profile, templates, now);
     setCobrancas(res.cobrancasAtualizadas);
+
+    if (isConnectedMode()) {
+      const changed = res.cobrancasAtualizadas.filter((c) => {
+        const previous = cobrancas.find((item) => item.id === c.id);
+        return (
+          previous &&
+          (previous.status !== c.status ||
+            previous.dias_atraso !== c.dias_atraso ||
+            previous.valor_com_multa !== c.valor_com_multa)
+        );
+      });
+
+      if (changed.length > 0) {
+        void cobrancasRepo
+          .updateBillingState(
+            changed.map((c) => ({
+              id: c.id,
+              status: c.status,
+              dias_atraso: c.dias_atraso,
+              valor_com_multa: c.valor_com_multa,
+            })),
+          )
+          .catch((err) => {
+            showToast('Falha ao sincronizar cobranças', getErrorMessage(err), 'error');
+          });
+      }
+    }
 
     try {
       confetti({
@@ -871,6 +1078,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Reset para demonstração
   const resetToDemoData = () => {
+    if (isConnectedMode()) {
+      showToast(
+        'Modo conectado',
+        'A restauração de dados de demonstração está disponível apenas no modo demo.',
+        'info'
+      );
+      return;
+    }
+
     const seed = getInitialSeedData();
     setUser(seed.user);
     setProfile(seed.profile);
@@ -898,29 +1114,58 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Auth: Login
   const login = async (email: string, _pass: string) => {
     try {
-      if (supabaseConnected) {
+      if (isConnectedMode()) {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password: _pass });
         if (error) return { error: error.message };
-        if (data.user) {
-          setUser({ id: data.user.id, email: data.user.email || email });
-        }
-      } else {
-        // Mock Login
-        const mockUser = { id: 'usr_' + Date.now(), email };
-        setUser(mockUser);
-        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(mockUser));
+        if (!data.user) return { error: 'Não foi possível iniciar a sessão.' };
+
+        const loadedProfile = await hydrateFromSupabase(data.user);
+        navigate(loadedProfile.onboarding_concluido ? '/dashboard' : '/onboarding');
+        return {};
       }
+
+      // Mock Login
+      const mockUser = { id: 'usr_' + Date.now(), email };
+      setUser(mockUser);
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(mockUser));
       navigate('/dashboard');
       return {};
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erro ao realizar login';
-      return { error: message };
+      return { error: getErrorMessage(err) };
     }
   };
 
   // Auth: Cadastro
   const signup = async (email: string, _pass: string, nome: string) => {
     try {
+      if (isConnectedMode()) {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password: _pass,
+          options: { data: { nome } },
+        });
+
+        if (error) return { error: error.message };
+
+        if (data.user?.identities && data.user.identities.length === 0) {
+          return { error: 'Este e-mail já está cadastrado. Faça login.' };
+        }
+
+        if (data.session?.user) {
+          const loadedProfile = await hydrateFromSupabase(data.session.user);
+          navigate(loadedProfile.onboarding_concluido ? '/dashboard' : '/onboarding');
+          return {};
+        }
+
+        showToast(
+          'Confirme seu e-mail',
+          'Enviamos um link de confirmação. Depois de confirmar, faça login para continuar.',
+          'success'
+        );
+        navigate('/login');
+        return {};
+      }
+
       const newUserId = 'usr_' + Date.now();
       const newUser = { id: newUserId, email };
       setUser(newUser);
@@ -948,27 +1193,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       ];
       setTemplates(standardTemplates);
 
-      if (supabaseConnected) {
-        await supabase.auth.signUp({
-          email,
-          password: _pass,
-          options: { data: { nome } },
-        });
-      }
-
       // Direciona para o onboarding obrigatório
       navigate('/onboarding');
       return {};
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erro ao criar conta';
-      return { error: message };
+      return { error: getErrorMessage(err) };
     }
   };
 
   // Auth: Login com Google
   const loginWithGoogle = async () => {
     try {
-      if (supabaseConnected) {
+      if (isConnectedMode()) {
         const redirectTo = `${window.location.origin}/#dashboard`;
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
@@ -982,46 +1218,48 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
         if (error) return { error: error.message };
         return {};
-      } else {
-        // Fallback para modo local / demonstração
-        const demoGoogleUser = {
-          id: 'usr_google_' + Date.now(),
-          email: 'usuario.google@gmail.com',
-        };
-        setUser(demoGoogleUser);
-        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(demoGoogleUser));
-
-        const updatedProfile: Profile = {
-          ...profile,
-          id: demoGoogleUser.id,
-          email: demoGoogleUser.email,
-          nome: profile.nome && profile.nome !== 'Dona Maria' ? profile.nome : 'Carlos Alberto (Google)',
-          onboarding_concluido: true,
-        };
-        setProfile(updatedProfile);
-        localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(updatedProfile));
-
-        showToast(
-          'Login com Google efetuado!',
-          'Acesso concedido via conta Google com sucesso (Modo Demonstração).',
-          'success'
-        );
-        navigate('/dashboard');
-        return {};
       }
+
+      // Fallback para modo local / demonstração
+      const demoGoogleUser = {
+        id: 'usr_google_' + Date.now(),
+        email: 'usuario.google@gmail.com',
+      };
+      setUser(demoGoogleUser);
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(demoGoogleUser));
+
+      const updatedProfile: Profile = {
+        ...profile,
+        id: demoGoogleUser.id,
+        email: demoGoogleUser.email,
+        nome: profile.nome && profile.nome !== 'Dona Maria' ? profile.nome : 'Carlos Alberto (Google)',
+        onboarding_concluido: true,
+      };
+      setProfile(updatedProfile);
+      localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(updatedProfile));
+
+      showToast(
+        'Login com Google efetuado!',
+        'Acesso concedido via conta Google com sucesso (Modo Demonstração).',
+        'success'
+      );
+      navigate('/dashboard');
+      return {};
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Falha ao autenticar com o Google';
-      return { error: message };
+      return { error: getErrorMessage(err) };
     }
   };
 
   // Logout
   const logout = async () => {
-    setUser(null);
-    localStorage.removeItem(STORAGE_KEYS.USER);
-    if (supabaseConnected) {
-      await supabase.auth.signOut();
+    if (isConnectedMode()) {
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        showToast('Falha ao encerrar sessão', getErrorMessage(err), 'error');
+      }
     }
+    clearSessionState();
     navigate('/');
   };
 
@@ -1037,6 +1275,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       dia_vencimento: number;
     }
   ) => {
+    if (isConnectedMode()) {
+      if (!profile.id) {
+        showToast('Falha ao concluir cadastro', 'Sessão ainda não carregada.', 'error');
+        throw new Error('Sessão ainda não carregada.');
+      }
+
+      try {
+        const result = await onboardingRepo.completeOnboarding({
+          nome: profileData.nome,
+          whatsapp: profileData.whatsapp_dono,
+          chavePix: profileData.chave_pix_dono,
+          tipoChavePix: profileData.tipo_chave_pix,
+          imovelApelido: imovelData.apelido_imovel,
+          imovelEndereco: imovelData.endereco,
+          inquilinoNome: inquilinoData.nome_inquilino,
+          inquilinoWhatsapp: inquilinoData.whatsapp_inquilino,
+          inquilinoCpf: inquilinoData.cpf || '',
+          valorAluguel: inquilinoData.valor_aluguel,
+          diaVencimento: inquilinoData.dia_vencimento,
+        });
+
+        setProfile(result.profile);
+        setImoveis((prev) => mergeById(prev, [result.imovel]));
+        setInquilinos((prev) => mergeById(prev, [result.inquilino]));
+        setCobrancas((prev) => sortByDueDate(mergeById(prev, result.cobrancas)));
+        navigate('/dashboard');
+        return;
+      } catch (err) {
+        showToast('Falha ao concluir cadastro', getErrorMessage(err), 'error');
+        throw err;
+      }
+    }
+
     const updatedProf: Profile = {
       ...profile,
       ...profileData,

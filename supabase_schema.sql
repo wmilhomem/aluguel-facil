@@ -193,3 +193,147 @@ SELECT cron.schedule(
     $$
 );
 */
+
+-- ========================================================
+-- ONBOARDING TRANSACIONAL (FASE 1)
+-- Cria perfil, imóvel, inquilino e as 12 primeiras cobranças.
+-- ========================================================
+
+CREATE OR REPLACE FUNCTION public.complete_onboarding(
+  p_nome text,
+  p_whatsapp text,
+  p_chave_pix text,
+  p_tipo_chave_pix text,
+  p_imovel_apelido text,
+  p_imovel_endereco text,
+  p_inquilino_nome text,
+  p_inquilino_whatsapp text,
+  p_inquilino_cpf text,
+  p_valor_aluguel numeric,
+  p_dia_vencimento int
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_imovel public.imoveis;
+  v_inquilino public.inquilinos;
+  v_mes_base date := date_trunc('month', current_date)::date;
+  v_dia int := least(greatest(coalesce(p_dia_vencimento, 1), 1), 28);
+  v_i int;
+  v_mes date;
+  v_vencimento date;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'not_authenticated' USING ERRCODE = '28000';
+  END IF;
+
+  IF p_nome IS NULL OR length(trim(p_nome)) = 0 THEN
+    RAISE EXCEPTION 'nome_obrigatorio' USING ERRCODE = '22023';
+  END IF;
+
+  IF p_imovel_apelido IS NULL OR length(trim(p_imovel_apelido)) = 0
+     OR p_imovel_endereco IS NULL OR length(trim(p_imovel_endereco)) = 0 THEN
+    RAISE EXCEPTION 'imovel_obrigatorio' USING ERRCODE = '22023';
+  END IF;
+
+  IF p_inquilino_nome IS NULL OR length(trim(p_inquilino_nome)) = 0
+     OR p_inquilino_whatsapp IS NULL OR length(trim(p_inquilino_whatsapp)) = 0 THEN
+    RAISE EXCEPTION 'inquilino_obrigatorio' USING ERRCODE = '22023';
+  END IF;
+
+  IF p_valor_aluguel IS NULL OR p_valor_aluguel <= 0 THEN
+    RAISE EXCEPTION 'valor_aluguel_invalido' USING ERRCODE = '22023';
+  END IF;
+
+  UPDATE public.profiles
+     SET nome = trim(p_nome),
+         whatsapp_dono = p_whatsapp,
+         chave_pix_dono = p_chave_pix,
+         tipo_chave_pix = p_tipo_chave_pix,
+         onboarding_concluido = true
+   WHERE id = v_user_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'profile_not_found' USING ERRCODE = 'P0002';
+  END IF;
+
+  INSERT INTO public.imoveis (user_id, apelido_imovel, endereco)
+  VALUES (v_user_id, trim(p_imovel_apelido), trim(p_imovel_endereco))
+  RETURNING * INTO v_imovel;
+
+  INSERT INTO public.inquilinos (
+    user_id,
+    imovel_id,
+    nome_inquilino,
+    whatsapp_inquilino,
+    cpf,
+    valor_aluguel,
+    dia_vencimento,
+    data_inicio_contrato,
+    multa_atraso,
+    juros_dia,
+    ativo
+  )
+  VALUES (
+    v_user_id,
+    v_imovel.id,
+    trim(p_inquilino_nome),
+    trim(p_inquilino_whatsapp),
+    nullif(trim(coalesce(p_inquilino_cpf, '')), ''),
+    p_valor_aluguel,
+    v_dia,
+    current_date,
+    2.0,
+    0.033,
+    true
+  )
+  RETURNING * INTO v_inquilino;
+
+  FOR v_i IN 0..11 LOOP
+    v_mes := (v_mes_base + (v_i || ' month')::interval)::date;
+    v_vencimento := (date_trunc('month', v_mes) + ((v_dia - 1) || ' day')::interval)::date;
+
+    INSERT INTO public.cobrancas (
+      inquilino_id,
+      user_id,
+      mes_referencia,
+      data_vencimento,
+      valor_original,
+      status,
+      dias_atraso
+    )
+    VALUES (
+      v_inquilino.id,
+      v_user_id,
+      v_mes,
+      v_vencimento,
+      p_valor_aluguel,
+      'pendente',
+      0
+    );
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'profile', (SELECT to_jsonb(p) FROM public.profiles p WHERE p.id = v_user_id),
+    'imovel', to_jsonb(v_imovel),
+    'inquilino', to_jsonb(v_inquilino),
+    'cobrancas', (
+      SELECT coalesce(jsonb_agg(to_jsonb(c) ORDER BY c.data_vencimento), '[]'::jsonb)
+      FROM public.cobrancas c
+      WHERE c.inquilino_id = v_inquilino.id
+    )
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.complete_onboarding(
+  text, text, text, text, text, text, text, text, text, numeric, int
+) FROM public;
+
+GRANT EXECUTE ON FUNCTION public.complete_onboarding(
+  text, text, text, text, text, text, text, text, text, numeric, int
+) TO authenticated;
