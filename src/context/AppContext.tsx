@@ -109,6 +109,8 @@ interface AppContextType {
   requestPasswordReset: (email: string) => Promise<AuthResult>;
   resendConfirmation: (email: string) => Promise<AuthResult>;
   updatePassword: (password: string) => Promise<AuthResult>;
+  checkoutStripe: (priceId?: string) => Promise<{ url?: string; error?: string }>;
+  openStripePortal: () => Promise<{ url?: string; error?: string }>;
   logout: () => Promise<void>;
   completeOnboarding: (
     profileData: { nome: string; whatsapp_dono: string; chave_pix_dono: string; tipo_chave_pix: Profile['tipo_chave_pix'] },
@@ -124,17 +126,6 @@ interface AppContextType {
 
   // Stripe Actions
   const checkoutStripe = async (priceId?: string): Promise<{ url?: string; error?: string }> => {
-    const user = user;
-    if (!user) return { error: 'Usuário não autenticado.' };
-
-    const price = priceId || (profile.plano_nome === 'intermediario' ? import.meta.env.VITE_STRIPE_PRICE_INTERMEDIARIO : import.meta.env.VITE_STRIPE_PRICE_INDIVIDUAL);
-    if (!price) return { error: 'Preço Stripe não configurado.' };
-
-    const userEmail = profile.email || '';
-    return await stripe.createStripeCheckoutSession({ priceId: price, userId: user.id, userEmail });
-  };
-
-  const openStripePortal = async (): Promise<{ url?: string; error?: string }> => {
     const user = user;
     if (!user) return { error: 'Usuário não autenticado.' };
 
@@ -1400,6 +1391,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     clearSessionState();
     navigate('/');
+  };
+
+  // Stripe Actions
+  const checkoutStripe = async (priceId?: string): Promise<{ url?: string; error?: string }> => {
+    const user = user;
+    if (!user) return { error: 'Usuário não autenticado.' };
+
+    const price = priceId || (profile.plano_nome === 'intermediario' ? import.meta.env.VITE_STRIPE_PRICE_INTERMEDIARIO : import.meta.env.VITE_STRIPE_PRICE_INDIVIDUAL);
+    if (!price) return { error: 'Preço Stripe não configurado.' };
+
+    const userEmail = profile.email || '';
+    return await stripe.createStripeCheckoutSession({ priceId: price, userId: user.id, userEmail });
+  };
+
+  const openStripePortal = async (): Promise<{ url?: string; error?: string }> => {
+    const user = user;
+    if (!user) return { error: 'Usuário não autenticado.' };
+
+    const customerId = profile.stripe_customer_id;
+    if (!customerId) return { error: 'Cliente Stripe não encontrado. Complete o checkout primeiro.' };
+
+    return await stripe.createStripePortalSession({ customerId, userId: user.id });
   };
 
   // Onboarding Obrigatório após cadastro
