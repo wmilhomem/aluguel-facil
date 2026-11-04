@@ -124,18 +124,6 @@ interface AppContextType {
     }
   ) => Promise<void>;
 
-  // Stripe Actions
-  const checkoutStripe = async (priceId?: string): Promise<{ url?: string; error?: string }> => {
-    const user = user;
-    if (!user) return { error: 'Usuário não autenticado.' };
-
-    const customerId = profile.stripe_customer_id;
-    if (!customerId) return { error: 'Cliente Stripe não encontrado. Complete o checkout primeiro.' };
-
-    return await stripe.createStripePortalSession({ customerId, userId: user.id });
-  };
-
-const AppContext = createContext<AppContextType | null>(null);
 
 const STORAGE_KEYS = {
   USER: 'aluguel_facil_user',
