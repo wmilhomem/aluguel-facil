@@ -541,6 +541,52 @@ export const LandingView: React.FC = () => {
         </div>
       </section>
 
+      {/* Vantagens */}
+      <section id="vantagens" className="py-20 bg-slate-50 border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <h2 className="text-xs font-bold text-indigo-600 uppercase tracking-widest mb-3">
+              Vantagens
+            </h2>
+            <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+              Benefícios de usar o Aluguel Fácil
+            </h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-slate-800/80 border border-slate-700 rounded-3xl p-6 hover:bg-slate-700/90 transition-colors">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-white">
+                  <CheckCircle2 className="w-3 h-3 text-indigo-300" />
+                </div>
+                <span className="font-medium text-slate-200">Sem imobiliárias</span>
+                <span className="text-xs text-slate-400">Não depende de corretoras caras</span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">O sistema gerencia tudo diretamente entre locador e inquilino.</p>
+            </div>
+            <div className="bg-slate-800/80 border border-slate-700 rounded-3xl p-6 hover:bg-slate-700/90 transition-colors">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-5 h-5 rounded-full bg-emerald-600 flex items-center justify-center text-white">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-300" />
+                </div>
+                <span className="font-medium text-slate-200">Cobrança automática</span>
+                <span className="text-xs text-slate-400">Robô das 08:00</span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">Lembretes de vencimento, cálculo de multa e juros automáticos.</p>
+            </div>
+            <div className="bg-slate-800/80 border border-slate-700 rounded-3xl p-6 hover:bg-slate-700/90 transition-colors">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-white">
+                  <CheckCircle2 className="w-3 h-3 text-indigo-300" />
+                </div>
+                <span className="font-medium text-slate-200">PDFs e Recibos</span>
+                <span className="text-xs text-slate-400">Geração em segundos</span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">Contratos e recibos em PDF profissionais para imprimir ou enviar.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Footer simples */}
       <footer className="bg-white border-t border-slate-200 py-10 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 space-y-2">
