@@ -4,4 +4,5 @@ export * as inquilinosRepo from './inquilinos';
 export * as cobrancasRepo from './cobrancas';
 export * as templatesRepo from './templates';
 export * as onboardingRepo from './onboarding';
+export * as filaEnviosRepo from './filaEnvios';
 export { DataLayerError, dataError } from './errors';

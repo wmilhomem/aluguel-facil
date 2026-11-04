@@ -25,6 +25,7 @@ import {
   onboardingRepo,
   profilesRepo,
   templatesRepo,
+  filaEnviosRepo,
 } from '../lib/repositories';
 import confetti from 'canvas-confetti';
 
@@ -173,23 +174,50 @@ function translateAuthError(message: string): string {
   if (normalized.includes('rate limit')) {
     return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
   }
+  if (normalized.includes('too many invalid attempts')) {
+    return 'Muitas tentativas inválidas. Conta temporariamente bloqueada.';
+  }
+  if (normalized.includes('invalid email format')) {
+    return 'Formato de e-mail inválido.';
+  }
+  if (normalized.includes(' email already confirmed')) {
+    return 'Este e-mail já está confirmado. Faça login.';
+  }
+  if (normalized.includes('maximum')) {
+    return 'Limite máximo de caracteres atingido.';
+  }
 
   return message;
 }
 
 async function requestPasswordReset(email: string): Promise<AuthResult> {
-  // TODO: implement with supabase.auth.resetPasswordForEmail
-  return { error: undefined, message: undefined, email };
+  try {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) return { error: translateAuthError(error.message) };
+    return { error: undefined, message: 'Link de redefinição enviado', email };
+  } catch (err: unknown) {
+    return { error: translateAuthError(err instanceof Error ? err.message : 'Erro desconhecido') };
+  }
 }
 
 async function resendConfirmation(email: string): Promise<AuthResult> {
-  // TODO: implement with supabase.auth.resend
-  return { error: undefined, message: undefined, email };
+  try {
+    const { data, error } = await supabase.auth.resend({ email });
+    if (error) return { error: translateAuthError(error.message) };
+    return { error: undefined, message: 'Link de confirmação reenviado', emailNotConfirmed: true };
+  } catch (err: unknown) {
+    return { error: translateAuthError(err instanceof Error ? err.message : 'Erro desconhecido') };
+  }
 }
 
 async function updatePassword(password: string): Promise<AuthResult> {
-  // TODO: implement with supabase.auth.updateUser
-  return { error: undefined, message: undefined };
+  try {
+    const { data, error } = await supabase.auth.updateUser({ password });
+    if (error) return { error: translateAuthError(error.message) };
+    return { error: undefined, message: 'Senha atualizada com sucesso' };
+  } catch (err: unknown) {
+    return { error: translateAuthError(err instanceof Error ? err.message : 'Erro desconhecido') };
+  }
 }
 
 function mergeById<T extends { id: string }>(current: T[], incoming: T[]): T[] {
@@ -1117,6 +1145,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           .catch((err) => {
             showToast('Falha ao sincronizar cobranças', getErrorMessage(err), 'error');
           });
+      }
+
+      // Persistir fila de mensagens no servidor com idempotência
+      try {
+        const today = new Date();
+        const hojeStr = `${today.getDate()}-${today.getMonth() + 1}`;
+
+        for (const item of res.fila) {
+          // Verificar se já existe item idempotente para este dia + cobrança
+          const existe = await filaEnviosRepo.checkIdempotencia(hojeStr + '-' + item.cobranca_id);
+
+          if (existe) continue; // Já existe, pular para evitar duplicata
+
+          // Mapear item FilaEnvioItem para dados do fila_envio
+          const filaData = {
+            user_id: profile.id || '',
+            inquilino_id: item.inquilino_id || '',
+            cobranca_id: item.cobranca_id,
+            template_tipo: item.tipo,
+            mensagem_texto: item.texto_mensagem,
+            status: 'pendente',
+            chave_idempotencia: hojeStr + '-' + item.cobranca_id,
+          };
+
+          await filaEnviosRepo.createFilaEnvio(filaData);
+        }
+      } catch (err) {
+        console.error('Erro ao persistir fila no servidor:', err);
+        showToast('Aviso', 'Falha ao salvar fila no servidor, mas operação local continuou.', 'info');
       }
     }
 

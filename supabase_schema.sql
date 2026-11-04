@@ -90,6 +90,25 @@ CREATE TABLE IF NOT EXISTS public.mensagens_template (
 );
 
 -- ========================================================
+-- TABELA FILA_ENVIO (fila de mensagens para envio diário)
+-- Armazena mensagens geradas pelo cron 08:00 com status de envio
+-- ========================================================
+
+CREATE TABLE IF NOT EXISTS public.fila_envio (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+    inquilino_id UUID REFERENCES public.inquilinos(id) ON DELETE CASCADE,
+    cobranca_id UUID REFERENCES public.cobrancas(id) ON DELETE CASCADE,
+    template_tipo TEXT NOT NULL CHECK (template_tipo IN ('lembrete_3_dias', 'vencimento_hoje', 'atraso_1_dia', 'atraso_5_dias')),
+    mensagem_texto TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'enviado', 'erro')),
+    data_criacao TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()),
+    data_enviado TIMESTAMPTZ,
+    chave_idempotencia UUID NOT NULL DEFAULT uuid_generate_v4(),
+    UNIQUE(chave_idempotencia)
+);
+
+-- ========================================================
 -- SEGURANÃ‡A TOTAL: ROW LEVEL SECURITY (RLS) RIGOROSO
 -- Garante isolamento estrito entre locadores
 -- ========================================================
@@ -139,6 +158,12 @@ CREATE POLICY "Donos so veem seus templates" ON public.mensagens_template
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
+-- 6. Fila de envio: Locador sÃ³ gerencia sua própria fila
+CREATE POLICY "Donos so gerenciam sua fila de envio" ON public.fila_envio
+    FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
 -- Defesa em profundidade: o papel anÃ´nimo nÃ£o acessa tabelas diretamente.
 -- A fatura pÃºblica Ã© servida apenas pela RPC SECURITY DEFINER abaixo.
 REVOKE ALL ON TABLE public.profiles, public.imoveis, public.inquilinos,
@@ -172,17 +197,14 @@ CREATE TRIGGER on_auth_user_created
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ========================================================
--- AGENDAMENTO PG_CRON: ROTINA DIÃRIA DAS 08:00 BRT (11:00 UTC)
+-- AGENDAMENTO PG_CRON: ROTINA DIÁRIA DAS 08:00 BRT (11:00 UTC)
 -- ========================================================
--- Para ativar no Supabase, configure o agendamento abaixo no SQL Editor:
--- Substitua 'SEU_PROJETO' pelo ID do seu projeto Supabase e 'SUA_ANON_KEY' pela sua chave de serviÃ§o.
-
-/*
-SELECT cron.unschedule('rotina-0800');
+-- Para ativar no Supabase, execute este script no SQL Editor:
+-- Substitua 'SEU_PROJETO' pelo ID do seu projeto Supabase e 'SUA_ANON_KEY' pela sua chave de serviço.
 
 SELECT cron.schedule(
     'rotina-0800',
-    '0 11 * * *', -- 11:00 UTC = 08:00 HorÃ¡rio de BrasÃ­lia
+    '0 11 * * *', -- 11:00 UTC = 08:00 Horário de Brasília
     $$
     SELECT net.http_post(
         url := 'https://SEU_PROJETO.supabase.co/functions/v1/rotina-cobranca-diaria',
@@ -192,9 +214,7 @@ SELECT cron.schedule(
         ),
         body := '{}'::jsonb
     );
-    $$
-);
-*/
+$$;
 
 -- ========================================================
 -- ONBOARDING TRANSACIONAL (FASE 1)
