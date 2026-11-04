@@ -17,6 +17,7 @@ import {
 } from '../lib/billingEngine';
 import { supabase } from '../lib/supabase';
 import { isConnectedMode } from '../lib/runtime';
+import { clearPendingEmail, setPendingEmail } from '../lib/authStorage';
 import {
   cobrancasRepo,
   imoveisRepo,
@@ -28,6 +29,14 @@ import {
 import confetti from 'canvas-confetti';
 
 import { ToastData } from '../components/Toast';
+
+export interface AuthResult {
+  error?: string;
+  message?: string;
+  email?: string;
+  requiresEmailConfirmation?: boolean;
+  emailNotConfirmed?: boolean;
+}
 
 interface AppContextType {
   // Auth & Profile
@@ -93,9 +102,12 @@ interface AppContextType {
   saveSupabaseSettings: (url: string, key: string) => Promise<void>;
 
   // Auth Actions
-  login: (email: string, pass: string) => Promise<{ error?: string }>;
-  signup: (email: string, pass: string, nome: string) => Promise<{ error?: string }>;
-  loginWithGoogle: () => Promise<{ error?: string }>;
+  login: (email: string, pass: string) => Promise<AuthResult>;
+  signup: (email: string, pass: string, nome: string) => Promise<AuthResult>;
+  loginWithGoogle: () => Promise<AuthResult>;
+  requestPasswordReset: (email: string) => Promise<AuthResult>;
+  resendConfirmation: (email: string) => Promise<AuthResult>;
+  updatePassword: (password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   completeOnboarding: (
     profileData: { nome: string; whatsapp_dono: string; chave_pix_dono: string; tipo_chave_pix: Profile['tipo_chave_pix'] },
@@ -138,6 +150,46 @@ function createEmptyProfile(): Profile {
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return 'Erro inesperado. Tente novamente.';
+}
+
+function translateAuthError(message: string): string {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes('email not confirmed')) {
+    return 'Confirme seu e-mail antes de entrar.';
+  }
+  if (normalized.includes('invalid login credentials')) {
+    return 'E-mail ou senha inválidos.';
+  }
+  if (normalized.includes('user already registered')) {
+    return 'Este e-mail já está cadastrado. Faça login.';
+  }
+  if (normalized.includes('password should be at least')) {
+    return 'A senha deve ter no mínimo 6 caracteres.';
+  }
+  if (normalized.includes('email rate limit exceeded')) {
+    return 'Limite de envio de e-mails atingido. Aguarde alguns minutos.';
+  }
+  if (normalized.includes('rate limit')) {
+    return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+  }
+
+  return message;
+}
+
+async function requestPasswordReset(email: string): Promise<AuthResult> {
+  // TODO: implement with supabase.auth.resetPasswordForEmail
+  return { error: undefined, message: undefined, email };
+}
+
+async function resendConfirmation(email: string): Promise<AuthResult> {
+  // TODO: implement with supabase.auth.resend
+  return { error: undefined, message: undefined, email };
+}
+
+async function updatePassword(password: string): Promise<AuthResult> {
+  // TODO: implement with supabase.auth.updateUser
+  return { error: undefined, message: undefined };
 }
 
 function mergeById<T extends { id: string }>(current: T[], incoming: T[]): T[] {
@@ -1377,10 +1429,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         runCronManual,
         resetToDemoData,
         saveSupabaseSettings,
-        login,
+login,
         signup,
         loginWithGoogle,
         logout,
+        requestPasswordReset: requestPasswordReset,
+        resendConfirmation: resendConfirmation,
+        updatePassword: updatePassword,
         completeOnboarding,
       }}
     >

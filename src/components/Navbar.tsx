@@ -32,7 +32,7 @@ export const Navbar: React.FC = () => {
   const [cronRunning, setCronRunning] = useState(false);
 
   const isAuth = !!user;
-  const isPublicPage = (!isAuth && currentRoute === '/') || currentRoute === '/landing' || currentRoute === '/login' || currentRoute === '/cadastro' || currentRoute === '/fatura';
+  const isPublicPage = (!isAuth && currentRoute === '/') || currentRoute === '/landing' || currentRoute === '/login' || currentRoute === '/cadastro' || currentRoute === '/fatura' || currentRoute === '/confirmar-email' || currentRoute === '/recuperar-senha' || currentRoute === '/redefinir-senha';
 
   const handleCronClick = () => {
     setCronRunning(true);
