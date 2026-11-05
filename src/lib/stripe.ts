@@ -258,6 +258,12 @@ export async function createStripePortalSession({
 
     return { error: 'PORTAL_FUNCTION_NOT_DEPLOYED' };
   } catch (err: any) {
-    return { error: err.message || 'Erro ao conectar ao portal Stripe' };
-  }
+return { error: err.message || 'Erro ao conectar ao portal Stripe' };
+}
+
+/**
+ * Função auxiliar para modo demonstração.
+ * Exportada para uso em DashboardView.tsx.
+ */
+export { isDemoMode } from '../lib/runtime';
 }
