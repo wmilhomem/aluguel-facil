@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { Profile } from '../types/database';
+export { isDemoMode } from '../lib/runtime';
 
 export interface PlanConfig {
   id: 'individual' | 'intermediario' | 'profissional';
@@ -265,5 +266,4 @@ return { error: err.message || 'Erro ao conectar ao portal Stripe' };
  * Função auxiliar para modo demonstração.
  * Exportada para uso em DashboardView.tsx.
  */
-export { isDemoMode } from '../lib/runtime';
 }
