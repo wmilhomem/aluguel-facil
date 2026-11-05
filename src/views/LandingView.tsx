@@ -94,9 +94,42 @@ export const LandingView: React.FC = () => {
 <button
   onClick={() => {
     try {
+      // Verificar se localStorage está disponível
+      if (typeof window === 'undefined' || !window.localStorage) {
+        alert('Não é possível ativar o modo demonstração neste ambiente.');
+        return;
+      }
+      
+      // Remover qualquer flag anterior antes de definir a nova
+      try {
+        localStorage.removeItem('ALUGUEL_FACIL_FORCE_DEMO');
+      } catch (e) {
+        console.error('Não foi possível remover flag anterior:', e);
+      }
+      
       localStorage.setItem('ALUGUEL_FACIL_FORCE_DEMO', 'true');
-      const { loadDemoData } = useApp();
-      loadDemoData();
+      
+      // Verificar se o contexto do aplicativo está disponível
+      const { loadDemoData, isDemoMode, setUser, setProfile, setImoveis, setInquilinos, setCobrancas, setTemplates } = useApp();
+      
+      // Verificar se já estamos em modo demo
+      if (isDemoMode()) {
+        navigate('/dashboard');
+        return;
+      }
+      
+      // Carregar dados de demonstração
+      try {
+        loadDemoData();
+      } catch (loadError) {
+        console.error('Erro ao carregar dados de demonstração:', loadError);
+        alert('Erro ao carregar dados de demonstração: ' + (loadError instanceof Error ? loadError.message : 'Erro desconhecido'));
+        // Tentar navegar mesmo com erro
+        navigate('/dashboard');
+        return;
+      }
+      
+      // Navegar apenas após carregar dados
       navigate('/dashboard');
     } catch (error) {
       console.error('Erro ao carregar demonstração:', error);
