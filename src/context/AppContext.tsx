@@ -685,8 +685,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     void initApp();
 
-    if (!isConnectedMode() && !isForcedDemo) {
-      return;
+    if (!isConnectedMode()) {
+      // Verificar modo demo forçado via localStorage
+      const isForcedDemo = typeof window !== 'undefined' && localStorage.getItem('ALUGUEL_FACIL_FORCE_DEMO') === 'true';
+      if (!isForcedDemo) {
+        return;
+      }
     }
 
     // Listener para eventos de autenticação Supabase (incluindo retorno de OAuth Google)
