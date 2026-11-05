@@ -93,10 +93,15 @@ export const LandingView: React.FC = () => {
               </button>
 <button
   onClick={() => {
-    localStorage.setItem('ALUGUEL_FACIL_FORCE_DEMO', 'true');
-    const { loadDemoData } = useApp();
-    loadDemoData();
-    navigate('/dashboard');
+    try {
+      localStorage.setItem('ALUGUEL_FACIL_FORCE_DEMO', 'true');
+      const { loadDemoData } = useApp();
+      loadDemoData();
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Erro ao carregar demonstração:', error);
+      alert('Erro ao carregar demonstração: ' + (error instanceof Error ? error.message : 'Erro desconhecido'));
+    }
   }}
   className="w-full sm:w-auto px-6 py-4 rounded-2xl bg-white hover:bg-slate-50 text-slate-800 font-bold text-base border border-slate-300 shadow-xs transition-all flex items-center justify-center gap-2"
 >
