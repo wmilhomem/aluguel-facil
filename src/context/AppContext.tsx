@@ -28,7 +28,7 @@ import {
   filaEnviosRepo,
 } from '../lib/repositories';
 import confetti from 'canvas-confetti';
-import stripe from '../lib/stripe';
+import * as stripe from '../lib/stripe';
 
 import { ToastData } from '../components/Toast';
 
@@ -125,6 +125,8 @@ interface AppContextType {
     }
   ) => Promise<void>
   } // Fecha interface AppContextType
+
+export const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
   USER: 'aluguel_facil_user',
@@ -1384,7 +1386,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Stripe Actions
   const checkoutStripe = async (priceId?: string): Promise<{ url?: string; error?: string }> => {
-    const user = user;
     if (!user) return { error: 'Usuário não autenticado.' };
 
     const price = priceId || (profile.plano_nome === 'intermediario' ? import.meta.env.VITE_STRIPE_PRICE_INTERMEDIARIO : import.meta.env.VITE_STRIPE_PRICE_INDIVIDUAL);
@@ -1395,7 +1396,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const openStripePortal = async (): Promise<{ url?: string; error?: string }> => {
-    const user = user;
     if (!user) return { error: 'Usuário não autenticado.' };
 
     const customerId = profile.stripe_customer_id;
