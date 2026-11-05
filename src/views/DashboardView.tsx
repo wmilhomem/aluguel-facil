@@ -17,7 +17,7 @@ import { ImovelModal } from '../components/ImovelModal';
 import { PaymentModal } from '../components/PaymentModal';
 import { SubscriptionBlockedModal } from '../components/SubscriptionBlockedModal';
 import { PlanLimitModal } from '../components/PlanLimitModal';
-import { isAccessBlocked, canAddProperty, getTrialDaysRemaining } from '../lib/stripe';
+import { isAccessBlocked, canAddProperty, getTrialDaysRemaining, isDemoMode } from '../lib/stripe';
 import { Inquilino, Cobranca, Imovel } from '../types/database';
 import {
   DollarSign,
