@@ -157,6 +157,40 @@ export const DashboardView: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
+      {/* Banner Modo Demostração */}
+      {isDemoMode() && (
+        <div className="bg-amber-600 text-slate-950 border-b border-amber-500 rounded-t-lg p-4 mb-6 text-center">
+          <div className="max-w-2xl mx-auto">
+            <p className="text-lg font-medium">
+              MODO DEMONSTRAÇÃO - Dados fictícios da Dona Maria Helena
+            </p>
+            <div className="mt-3 flex gap-2 justify-center">
+              <button
+                onClick={() => {
+                  localStorage.removeItem('ALUGUEL_FACIL_FORCE_DEMO');
+                  const { setUser, setProfile, setImoveis, setInquilinos, setCobrancas, setTemplates } = useApp();
+                  setUser(null);
+                  setProfile(createEmptyProfile());
+                  setImoveis([]);
+                  setInquilinos([]);
+                  setCobrancas([]);
+                  setTemplates([]);
+                  localStorage.removeItem(STORAGE_KEYS.USER);
+                  localStorage.removeItem(STORAGE_KEYS.PROFILE);
+                  localStorage.removeItem(STORAGE_KEYS.IMOVEIS);
+                  localStorage.removeItem(STORAGE_KEYS.INQUILINOS);
+                  localStorage.removeItem(STORAGE_KEYS.COBRANCAS);
+                  localStorage.removeItem(STORAGE_KEYS.TEMPLATES);
+                  navigate('/');
+                }}
+                className="px-4 py-1.5 rounded-lg bg-slate-900 text-slate-200 text-sm font-semibold hover:bg-slate-800 transition-colors"
+              >
+                Sair da Demo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Top Banner de Boas-vindas e Status do Cron */}
       <div className="bg-slate-900 text-white border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">

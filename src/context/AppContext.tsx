@@ -645,10 +645,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     const initApp = async () => {
       try {
-        const connected = isConnectedMode();
+        // Verificar forced demo via localStorage (modo sob demanda)
+        const isForcedDemo = typeof window !== 'undefined' && localStorage.getItem('ALUGUEL_FACIL_FORCE_DEMO') === 'true';
+        
+        const connected = isForcedDemo ? false : isConnectedMode();
         setSupabaseConnected(connected);
 
-        if (!connected) {
+        if (!connected || isForcedDemo) {
           loadDemoData();
         } else {
           const { data: sessionData, error } = await supabase.auth.getSession();
@@ -682,7 +685,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     void initApp();
 
-    if (!isConnectedMode()) {
+    if (!isConnectedMode() && !isForcedDemo) {
       return;
     }
 

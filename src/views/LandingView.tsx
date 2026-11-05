@@ -91,13 +91,18 @@ export const LandingView: React.FC = () => {
                 <span>Começar Agora</span>
                 <ArrowRight className="w-5 h-5" />
               </button>
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="w-full sm:w-auto px-6 py-4 rounded-2xl bg-white hover:bg-slate-50 text-slate-800 font-bold text-base border border-slate-300 shadow-xs transition-all flex items-center justify-center gap-2"
-              >
-                <Zap className="w-5 h-5 text-amber-500" />
-                <span>Ver Demonstração ao Vivo</span>
-              </button>
+<button
+  onClick={() => {
+    localStorage.setItem('ALUGUEL_FACIL_FORCE_DEMO', 'true');
+    const { loadDemoData } = useApp();
+    loadDemoData();
+    navigate('/dashboard');
+  }}
+  className="w-full sm:w-auto px-6 py-4 rounded-2xl bg-white hover:bg-slate-50 text-slate-800 font-bold text-base border border-slate-300 shadow-xs transition-all flex items-center justify-center gap-2"
+>
+  <Zap className="w-5 h-5 text-amber-500" />
+  <span>Ver Demonstração ao Vivo</span>
+</button>
             </div>
 
             {/* Micro garantias */}
