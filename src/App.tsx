@@ -29,7 +29,10 @@ const MainRouter: React.FC = () => {
     currentRoute !== '/onboarding' &&
     currentRoute !== '/fatura'
   ) {
-    return <OnboardingView />;
+    // Pular onboarding se estiver em modo demo
+    if (!isDemoMode()) {
+      return <OnboardingView />;
+    }
   }
 
   // Roteador de telas
