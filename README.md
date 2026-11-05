@@ -45,7 +45,7 @@ frontend ou para a Netlify.
 
 ## Deploy
 
-- Frontend: Netlify (`https://aluguel.reflexsus.com`).
+- Frontend: Netlify (`https://aluguelfacil.netlify.app`).
 - Variáveis públicas: `VITE_APP_URL`, `VITE_SUPABASE_URL`,
   `VITE_SUPABASE_ANON_KEY`, `VITE_DEMO_MODE` e `VITE_STRIPE_PUBLISHABLE_KEY`.
 - Segredos de Stripe e service role ficam apenas nas Edge Functions/ambiente

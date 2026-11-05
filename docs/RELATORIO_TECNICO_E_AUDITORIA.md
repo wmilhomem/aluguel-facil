@@ -15,7 +15,7 @@
 - Frontend: React 19 + TypeScript + Vite 8 + Tailwind CSS v4.
 - Backend previsto: Supabase (Postgres, Auth, Edge Functions).
 - Pagamentos: Stripe.
-- Hospedagem do frontend: Netlify — `https://aluguel.reflexsus.com`.
+- Hospedagem do frontend: Netlify — `https://aluguelfacil.netlify.app`.
 - Banco: Supabase (schema aplicado em 04/11/2026; RLS validado com `npm run test:rls`).
 - Credenciais configuradas no ambiente local; segredos não versionados.
 - Restrição de produto: **não alterar design, componentes ou cores** sem autorização.

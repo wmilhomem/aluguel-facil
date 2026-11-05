@@ -6,7 +6,7 @@
 ## Restrições
 
 - Não alterar layout, componentes visuais, tipografia ou paleta.
-- Netlify: `https://aluguel.reflexsus.com`.
+- Netlify: `https://aluguelfacil.netlify.app`.
 - Supabase: schema aplicado em 04/11/2026; RLS e fatura pública validados com `npm run test:rls`.
 - Modo demo deve continuar funcional até a virada para produção.
 
