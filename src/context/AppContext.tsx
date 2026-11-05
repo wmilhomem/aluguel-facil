@@ -28,6 +28,7 @@ import {
   filaEnviosRepo,
 } from '../lib/repositories';
 import confetti from 'canvas-confetti';
+import stripe from '../lib/stripe';
 
 import { ToastData } from '../components/Toast';
 
@@ -98,7 +99,7 @@ interface AppContextType {
 
   updateProfile: (data: Partial<Profile>) => Promise<void>;
   updateTemplate: (tipo: TipoMensagem, texto: string) => Promise<void>;
-  runCronManual: () => { count: number; items: FilaEnvioItem[] };
+  runCronManual: () => Promise<{ count: number; items: FilaEnvioItem[] }>;
   resetToDemoData: () => void;
   saveSupabaseSettings: (url: string, key: string) => Promise<void>;
 
@@ -122,8 +123,8 @@ interface AppContextType {
       valor_aluguel: number;
       dia_vencimento: number;
     }
-  ) => Promise<void>;
-
+  ) => Promise<void>
+  } // Fecha interface AppContextType
 
 const STORAGE_KEYS = {
   USER: 'aluguel_facil_user',
@@ -180,7 +181,7 @@ function translateAuthError(message: string): string {
   if (normalized.includes('invalid email format')) {
     return 'Formato de e-mail inválido.';
   }
-  if (normalized.includes(' email already confirmed')) {
+  if (normalized.includes('email already confirmed')) {
     return 'Este e-mail já está confirmado. Faça login.';
   }
   if (normalized.includes('maximum')) {
@@ -992,7 +993,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   ): Promise<void> => {
     const dataEfetiva = dataPagamento || new Date().toISOString().split('T')[0];
     const existing = cobrancas.find((c) => c.id === cobrancaId);
-    const link = linkComprovante || existing?.link_comprovante || null;
+    const link = linkComprovante || existing?.link_comprovante || '';
 
     if (isConnectedMode()) {
       try {
@@ -1224,8 +1225,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Salvar credenciais reais do Supabase
   const saveSupabaseSettings = async (url: string, key: string) => {
-    localStorage.setItem('aluguel_facil_supabase_url', url);
-    localStorage.setItem('aluguel_facil_supabase_key', key);
+    
+    
     window.location.reload();
   };
 
@@ -1234,7 +1235,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       if (isConnectedMode()) {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password: _pass });
-        if (error) return { error: error.message };
+        if (error) return { error: translateAuthError(error.message) };
         if (!data.user) return { error: 'Não foi possível iniciar a sessão.' };
 
         const loadedProfile = await hydrateFromSupabase(data.user);
@@ -1263,7 +1264,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           options: { data: { nome } },
         });
 
-        if (error) return { error: error.message };
+        if (error) return { error: translateAuthError(error.message) };
 
         if (data.user?.identities && data.user.identities.length === 0) {
           return { error: 'Este e-mail já está cadastrado. Faça login.' };
@@ -1334,7 +1335,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             },
           },
         });
-        if (error) return { error: error.message };
+        if (error) return { error: translateAuthError(error.message) };
         return {};
       }
 
