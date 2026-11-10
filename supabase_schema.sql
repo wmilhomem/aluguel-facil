@@ -3,7 +3,7 @@
 -- Execute este script no SQL Editor do seu projeto Supabase
 -- ========================================================
 
--- Habilitar extensÃµes necessÃ¡rias
+-- Habilitar extensões necessárias
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_cron";
 CREATE EXTENSION IF NOT EXISTS "pg_net";
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     nome TEXT,
     whatsapp_dono TEXT,
     chave_pix_dono TEXT,
-    tipo_chave_pix TEXT DEFAULT 'CPF', -- CPF, CNPJ, Telefone, Email, AleatÃ³ria
+    tipo_chave_pix TEXT DEFAULT 'CPF', -- CPF, CNPJ, Telefone, Email, Aleatória
     cidade_pix TEXT DEFAULT 'GOIANIA',
     plano TEXT DEFAULT 'ate_3_imoveis', -- 1_imovel, ate_3_imoveis, ate_10_imoveis
     onboarding_concluido BOOLEAN DEFAULT false,
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- MigraÃ§Ã£o rÃ¡pida para quem jÃ¡ tem a tabela profiles criada:
+-- Migração rápida para quem já tem a tabela profiles criada:
 -- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
 -- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
 -- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS plano_status TEXT DEFAULT 'trial';
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS public.imoveis (
     created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 3. TABELA INQUILINOS (locatÃ¡rios informais)
+-- 3. TABELA INQUILINOS (locatários informais)
 CREATE TABLE IF NOT EXISTS public.inquilinos (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS public.cobrancas (
     created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
 );
 
--- 5. TABELA MENSAGENS_TEMPLATE (templates editÃ¡veis de WhatsApp)
+-- 5. TABELA MENSAGENS_TEMPLATE (templates editáveis de WhatsApp)
 CREATE TABLE IF NOT EXISTS public.mensagens_template (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
@@ -104,12 +104,12 @@ CREATE TABLE IF NOT EXISTS public.fila_envio (
     status TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente', 'enviado', 'erro')),
     data_criacao TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()),
     data_enviado TIMESTAMPTZ,
-    chave_idempotencia UUID NOT NULL DEFAULT uuid_generate_v4(),
+    chave_idempotencia TEXT NOT NULL,
     UNIQUE(chave_idempotencia)
 );
 
 -- ========================================================
--- SEGURANÃ‡A TOTAL: ROW LEVEL SECURITY (RLS) RIGOROSO
+-- SEGURANÇA TOTAL: ROW LEVEL SECURITY (RLS) RIGOROSO
 -- Garante isolamento estrito entre locadores
 -- ========================================================
 
@@ -118,56 +118,58 @@ ALTER TABLE public.imoveis ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inquilinos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cobrancas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mensagens_template ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.fila_envio ENABLE ROW LEVEL SECURITY;
 
--- Limpar policies antigas para recriaÃ§Ã£o sem conflitos
+-- Limpar policies antigas para recriação sem conflitos
 DROP POLICY IF EXISTS "Donos so veem seus profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Donos so veem seus imoveis" ON public.imoveis;
 DROP POLICY IF EXISTS "Donos so veem seus inquilinos" ON public.inquilinos;
 DROP POLICY IF EXISTS "Donos so veem suas cobrancas" ON public.cobrancas;
 DROP POLICY IF EXISTS "Inquilino pode consultar fatura publica por id" ON public.cobrancas;
 DROP POLICY IF EXISTS "Donos so veem seus templates" ON public.mensagens_template;
+DROP POLICY IF EXISTS "Donos so gerenciam sua fila de envio" ON public.fila_envio;
 
--- 1. Profiles: Apenas o prÃ³prio locador lÃª e atualiza seu perfil
+-- 1. Profiles: Apenas o próprio locador lê e atualiza seu perfil
 CREATE POLICY "Donos so veem seus profiles" ON public.profiles
     FOR ALL
     USING (auth.uid() = id)
     WITH CHECK (auth.uid() = id);
 
--- 2. ImÃ³veis: Locador sÃ³ acessa os imÃ³veis que pertencem ao seu user_id
+-- 2. Imóveis: Locador só acessa os imóveis que pertencem ao seu user_id
 CREATE POLICY "Donos so veem seus imoveis" ON public.imoveis
     FOR ALL
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
--- 3. Inquilinos: Locador sÃ³ acessa os inquilinos que pertencem ao seu user_id
+-- 3. Inquilinos: Locador só acessa os inquilinos que pertencem ao seu user_id
 CREATE POLICY "Donos so veem seus inquilinos" ON public.inquilinos
     FOR ALL
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
--- 4. CobranÃ§as: OperaÃ§Ãµes completas apenas pelo dono. O acesso pÃºblico Ã© feito
+-- 4. Cobranças: Operações completas apenas pelo dono. O acesso público é feito
 -- exclusivamente pela RPC get_public_invoice(token), nunca por SELECT direto.
 CREATE POLICY "Donos so veem suas cobrancas" ON public.cobrancas
     FOR ALL
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
--- 5. Templates: Locador sÃ³ acessa seus prÃ³prios modelos de mensagem
+-- 5. Templates: Locador só acessa seus próprios modelos de mensagem
 CREATE POLICY "Donos so veem seus templates" ON public.mensagens_template
     FOR ALL
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
--- 6. Fila de envio: Locador sÃ³ gerencia sua própria fila
+-- 6. Fila de envio: Locador só gerencia sua própria fila
 CREATE POLICY "Donos so gerenciam sua fila de envio" ON public.fila_envio
     FOR ALL
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
--- Defesa em profundidade: o papel anÃ´nimo nÃ£o acessa tabelas diretamente.
--- A fatura pÃºblica Ã© servida apenas pela RPC SECURITY DEFINER abaixo.
+-- Defesa em profundidade: o papel anônimo não acessa tabelas diretamente.
+-- A fatura pública é servida apenas pela RPC SECURITY DEFINER abaixo.
 REVOKE ALL ON TABLE public.profiles, public.imoveis, public.inquilinos,
-    public.cobrancas, public.mensagens_template FROM anon;
+    public.cobrancas, public.mensagens_template, public.fila_envio FROM anon;
 
 -- ========================================================
 -- TRIGGER PARA CRIAR PROFILE E TEMPLATES APÃ“S O CADASTRO
@@ -179,13 +181,13 @@ BEGIN
     INSERT INTO public.profiles (id, email, nome)
     VALUES (NEW.id, NEW.email, COALESCE(NEW.raw_user_meta_data->>'nome', 'Locador'));
 
-    -- Inserir templates padrÃ£o de WhatsApp com as variÃ¡veis
+    -- Inserir templates padrão de WhatsApp com as variáveis
     INSERT INTO public.mensagens_template (user_id, tipo, texto)
     VALUES 
-    (NEW.id, 'lembrete_3_dias', 'OlÃ¡, {{nome}}! Tudo bem? Passando para lembrar que o aluguel do imÃ³vel {{endereco}} vence em 3 dias ({{vencimento}}), no valor de {{valor}}. Chave Pix: {{pix}}. Link da fatura com QR Code: {{link}}. Qualquer dÃºvida, estou Ã  disposiÃ§Ã£o!'),
-    (NEW.id, 'vencimento_hoje', 'OlÃ¡, {{nome}}! Hoje Ã© o dia do vencimento do seu aluguel ({{endereco}}). Valor: {{valor}}. VocÃª pode pagar pela chave Pix: {{pix}}. Link para ver a fatura e comprovante: {{link}}. Obrigado!'),
-    (NEW.id, 'atraso_1_dia', 'OlÃ¡, {{nome}}. Notamos que o aluguel do imÃ³vel {{endereco}} venceu ontem. O valor atualizado com multa e juros Ã© de {{valor}}. Por favor, realize o pagamento via Pix: {{pix}}. Fatura: {{link}}. Caso jÃ¡ tenha pago, por favor nos envie o comprovante!'),
-    (NEW.id, 'atraso_5_dias', 'OlÃ¡, {{nome}}. Seu aluguel do imÃ³vel {{endereco}} estÃ¡ com 5 dias de atraso. O valor recalculado hoje Ã© de {{valor}}. Chave Pix: {{pix}}. Fatura: {{link}}. Pedimos que regularize com urgÃªncia ou entre em contato para alinharmos.');
+    (NEW.id, 'lembrete_3_dias', 'Olá, {{nome}}! Tudo bem? Passando para lembrar que o aluguel do imóvel {{endereco}} vence em 3 dias ({{vencimento}}), no valor de {{valor}}. Chave Pix: {{pix}}. Link da fatura com QR Code: {{link}}. Qualquer dúvida, estou à disposição!'),
+    (NEW.id, 'vencimento_hoje', 'Olá, {{nome}}! Hoje é o dia do vencimento do seu aluguel ({{endereco}}). Valor: {{valor}}. Você pode pagar pela chave Pix: {{pix}}. Link para ver a fatura e comprovante: {{link}}. Obrigado!'),
+    (NEW.id, 'atraso_1_dia', 'Olá, {{nome}}. Notamos que o aluguel do imóvel {{endereco}} venceu ontem. O valor atualizado com multa e juros é de {{valor}}. Por favor, realize o pagamento via Pix: {{pix}}. Fatura: {{link}}. Caso já tenha pago, por favor nos envie o comprovante!'),
+    (NEW.id, 'atraso_5_dias', 'Olá, {{nome}}. Seu aluguel do imóvel {{endereco}} está com 5 dias de atraso. O valor recalculado hoje é de {{valor}}. Chave Pix: {{pix}}. Fatura: {{link}}. Pedimos que regularize com urgência ou entre em contato para alinharmos.');
 
     RETURN NEW;
 END;
@@ -214,11 +216,11 @@ SELECT cron.schedule(
         ),
         body := '{}'::jsonb
     );
-$$;
+$$);
 
 -- ========================================================
 -- ONBOARDING TRANSACIONAL (FASE 1)
--- Cria perfil, imÃ³vel, inquilino e as 12 primeiras cobranÃ§as.
+-- Cria perfil, imóvel, inquilino e as 12 primeiras cobranças.
 -- ========================================================
 
 CREATE OR REPLACE FUNCTION public.complete_onboarding(
@@ -362,8 +364,8 @@ GRANT EXECUTE ON FUNCTION public.complete_onboarding(
 
 -- ========================================================
 -- FASE 2: FATURA PÃšBLICA POR TOKEN OPACO
--- Retorna somente os campos necessÃ¡rios para o inquilino pagar.
--- NÃ£o expÃµe user_id, e-mail, CPF, WhatsApp do inquilino nem IDs internos.
+-- Retorna somente os campos necessários para o inquilino pagar.
+-- Não expõe user_id, e-mail, CPF, WhatsApp do inquilino nem IDs internos.
 -- ========================================================
 
 CREATE OR REPLACE FUNCTION public.get_public_invoice(p_token uuid)

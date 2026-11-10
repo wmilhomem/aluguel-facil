@@ -141,7 +141,7 @@ export const InquilinosView: React.FC = () => {
                   : 'bg-slate-800/80 text-slate-400 hover:text-white'
               }`}
             >
-              Inquilinos Ativos ({inquilinos.length})
+              Inquilinos ({inquilinos.length})
             </button>
             <button
               onClick={() => setActiveTab('imoveis')}
@@ -226,8 +226,14 @@ export const InquilinosView: React.FC = () => {
                             </div>
                           </div>
 
-                          <span className="text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">
-                            Ativo
+                          <span
+                            className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                              inq.ativo
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                            }`}
+                          >
+                            {inq.ativo ? 'Ativo' : 'Inativo'}
                           </span>
                         </div>
 
@@ -270,7 +276,7 @@ export const InquilinosView: React.FC = () => {
                           <div className="flex justify-between items-center text-slate-600 pt-1">
                             <span className="text-slate-500">Cobranças Geradas:</span>
                             <span className="font-bold text-indigo-600">
-                              {cobPagas}/{totalCob} pagas (12 no banco)
+                              {cobPagas}/{totalCob} pagas
                             </span>
                           </div>
                         </div>

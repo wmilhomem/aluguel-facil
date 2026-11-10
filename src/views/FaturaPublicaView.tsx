@@ -146,13 +146,14 @@ export const FaturaPublicaView: React.FC = () => {
     if (!profile.chave_pix_dono || !cobranca) return '';
     return generatePixEMV({
       chave: profile.chave_pix_dono,
+      tipoChave: profile.tipo_chave_pix,
       nomeRecebedor: profile.nome || 'LOCADOR',
       cidade: profile.cidade_pix || 'GOIANIA',
       valor: valorFinal,
       txId: `FAT${cobranca.id.slice(-6).toUpperCase()}`,
       mensagem: `Aluguel ${imovel?.apelido_imovel || 'Imovel'}`.slice(0, 35),
     });
-  }, [profile.chave_pix_dono, profile.nome, profile.cidade_pix, valorFinal, cobranca?.id, imovel?.apelido_imovel]);
+  }, [profile.chave_pix_dono, profile.tipo_chave_pix, profile.nome, profile.cidade_pix, valorFinal, cobranca?.id, imovel?.apelido_imovel]);
 
   // Geração do QR Code real a partir do payload EMV
   useEffect(() => {

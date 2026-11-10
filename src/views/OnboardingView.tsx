@@ -27,12 +27,12 @@ export const OnboardingView: React.FC = () => {
   const [chavePix, setChavePix] = useState(profile.chave_pix_dono || '');
 
   // Passo 2: Primeiro Imóvel e Inquilino
-  const [apelidoImovel, setApelidoImovel] = useState('Kitnet 01 - Centro');
-  const [enderecoImovel, setEnderecoImovel] = useState('Rua Principal, nº 100 - Centro');
-  const [nomeInquilino, setNomeInquilino] = useState('Lucas Ferreira');
-  const [whatsappInquilino, setWhatsappInquilino] = useState('(62) 99876-1234');
+  const [apelidoImovel, setApelidoImovel] = useState('');
+  const [enderecoImovel, setEnderecoImovel] = useState('');
+  const [nomeInquilino, setNomeInquilino] = useState('');
+  const [whatsappInquilino, setWhatsappInquilino] = useState('');
   const [cpfInquilino, setCpfInquilino] = useState('');
-  const [valorAluguel, setValorAluguel] = useState('850');
+  const [valorAluguel, setValorAluguel] = useState('');
   const [diaVencimento, setDiaVencimento] = useState('10');
 
   const [loading, setLoading] = useState(false);

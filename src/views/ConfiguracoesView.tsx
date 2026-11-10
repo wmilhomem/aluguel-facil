@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Profile, TipoMensagem } from '../types/database';
 import {
@@ -63,6 +63,28 @@ export const ConfiguracoesView: React.FC = () => {
     templates.find((t) => t.tipo === 'atraso_5_dias')?.texto || ''
   );
   const [templatesSaved, setTemplatesSaved] = useState(false);
+
+  // Mantém o formulário sincronizado quando o perfil/templates são hidratados após o login.
+  useEffect(() => {
+    setNome(profile.nome || '');
+    setWhatsapp(profile.whatsapp_dono || '');
+    setChavePix(profile.chave_pix_dono || '');
+    setTipoChave(profile.tipo_chave_pix || 'CPF');
+    setCidadePix(profile.cidade_pix || 'GOIANIA');
+  }, [
+    profile.nome,
+    profile.whatsapp_dono,
+    profile.chave_pix_dono,
+    profile.tipo_chave_pix,
+    profile.cidade_pix,
+  ]);
+
+  useEffect(() => {
+    setTplLembrete(templates.find((t) => t.tipo === 'lembrete_3_dias')?.texto || '');
+    setTplHoje(templates.find((t) => t.tipo === 'vencimento_hoje')?.texto || '');
+    setTplAtraso1(templates.find((t) => t.tipo === 'atraso_1_dia')?.texto || '');
+    setTplAtraso5(templates.find((t) => t.tipo === 'atraso_5_dias')?.texto || '');
+  }, [templates]);
 
   // Supabase
   const [supabaseUrl, setSupabaseUrl] = useState(
@@ -144,20 +166,11 @@ export const ConfiguracoesView: React.FC = () => {
       }
 
       if (res.error === 'STRIPE_FUNCTION_NOT_DEPLOYED') {
-        const proceedSim = window.confirm(
-          `Simulação Stripe Checkout:\n\n` +
-          `A Edge Function 'create-stripe-checkout' será acionada assim que você configurar a variável STRIPE_SECRET_KEY no Supabase.\n\n` +
-          `Deseja simular a ativação imediata do ${plan.name} para testes no navegador?`
+        showToast(
+          'Checkout indisponível',
+          'Configure a Edge Function create-stripe-checkout e a STRIPE_SECRET_KEY no Supabase para assinar.',
+          'info'
         );
-        if (proceedSim) {
-          await updateProfile({
-            plano: plan.id === 'individual' ? '1_imovel' : plan.id === 'profissional' ? 'ate_10_imoveis' : 'ate_3_imoveis',
-            plano_nome: plan.id,
-            plano_status: 'ativo',
-            trial_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          });
-          showToast('Plano ativado em modo teste!', `Você agora está no ${plan.name}.`, 'success');
-        }
       } else {
         showToast('Erro no Checkout', res.error || 'Verifique as chaves do Stripe.', 'error');
       }

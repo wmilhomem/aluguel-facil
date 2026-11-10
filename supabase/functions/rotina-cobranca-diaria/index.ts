@@ -14,6 +14,30 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function montarMensagem(
+  tipo: string,
+  inq: any,
+  profile: any,
+  publicToken: string,
+  valor: number,
+  vencimento: string,
+): string {
+  const imovel = inq.imoveis?.apelido_imovel || "Imóvel";
+  const pix = profile?.chave_pix_dono || "Chave Pix a definir";
+  const link = publicToken ? `#fatura-${publicToken}` : "";
+  const valorTxt = `R$ ${Number(valor).toFixed(2).replace(".", ",")}`;
+  const venc = (vencimento || "").split("-").reverse().join("/");
+
+  switch (tipo) {
+    case "lembrete_3_dias":
+      return `Olá, ${inq.nome_inquilino}! O aluguel de ${imovel} vence em 3 dias (${venc}), no valor de ${valorTxt}. Chave Pix: ${pix}. Fatura: ${link}`;
+    case "vencimento_hoje":
+      return `Olá, ${inq.nome_inquilino}! O aluguel de ${imovel} vence hoje (${venc}), no valor de ${valorTxt}. Chave Pix: ${pix}. Fatura: ${link}`;
+    default:
+      return `Olá, ${inq.nome_inquilino}. O aluguel de ${imovel} está em atraso. Valor atualizado: ${valorTxt}. Chave Pix: ${pix}. Fatura: ${link}`;
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -83,7 +107,7 @@ serve(async (req: Request) => {
       let novoStatus = cob.status;
       let novoValorComMulta = cob.valor_original;
       let diasAtraso = 0;
-      let tipoMsg = null;
+      let tipoMsg: string | null = null;
 
       if (diffDays === -3) {
         // Vence em 3 dias
@@ -123,15 +147,45 @@ serve(async (req: Request) => {
       }
 
       if (tipoMsg) {
-        mensagensGeradas++;
-        filaMensagens.push({
-          cobranca_id: cob.id,
-          inquilino: inq.nome_inquilino,
-          whatsapp: inq.whatsapp_inquilino,
-          tipo: tipoMsg,
-          valor: novoStatus === "atrasado" ? novoValorComMulta : cob.valor_original,
-          vencimento: cob.data_vencimento,
-        });
+        const profile = (cob as any).profiles;
+        const valorFinal = novoStatus === "atrasado" ? novoValorComMulta : cob.valor_original;
+        const mensagemTexto = montarMensagem(
+          tipoMsg,
+          inq,
+          profile,
+          cob.public_token,
+          valorFinal,
+          cob.data_vencimento,
+        );
+
+        const { error: filaError } = await supabase
+          .from("fila_envio")
+          .upsert(
+            {
+              user_id: cob.user_id,
+              inquilino_id: cob.inquilino_id,
+              cobranca_id: cob.id,
+              template_tipo: tipoMsg,
+              mensagem_texto: mensagemTexto,
+              status: "pendente",
+              chave_idempotencia: `${todayStr}-${cob.id}`,
+            },
+            { onConflict: "chave_idempotencia", ignoreDuplicates: true },
+          );
+
+        if (filaError) {
+          console.error("Erro ao gravar fila de envio:", filaError);
+        } else {
+          mensagensGeradas++;
+          filaMensagens.push({
+            cobranca_id: cob.id,
+            inquilino: inq.nome_inquilino,
+            whatsapp: inq.whatsapp_inquilino,
+            tipo: tipoMsg,
+            valor: valorFinal,
+            vencimento: cob.data_vencimento,
+          });
+        }
       }
     }
 

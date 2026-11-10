@@ -55,7 +55,7 @@ export const Toast: React.FC<ToastProps> = ({ toast, onClose }) => {
         <div className="mt-0.5">{style.icon}</div>
         <div className="flex-1 pr-1">
           <h4 className={`text-sm font-bold ${style.title}`}>{toast.title}</h4>
-          <p className="text-xs mt-0.5 leading-relaxed text-slate-200">{toast.message}</p>
+          <p className="text-xs mt-0.5 leading-relaxed">{toast.message}</p>
         </div>
         <button
           onClick={onClose}

@@ -195,7 +195,9 @@ function translateAuthError(message: string): string {
 
 async function requestPasswordReset(email: string): Promise<AuthResult> {
   try {
-    const { data, error } = await supabase.auth.resetPasswordForEmail(email);
+    const redirectTo =
+      typeof window !== 'undefined' ? `${window.location.origin}/#redefinir-senha` : undefined;
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
     if (error) return { error: translateAuthError(error.message) };
     return { error: undefined, message: 'Link de redefinição enviado', email };
   } catch (err: unknown) {
@@ -205,7 +207,7 @@ async function requestPasswordReset(email: string): Promise<AuthResult> {
 
 async function resendConfirmation(email: string): Promise<AuthResult> {
   try {
-    const { data, error } = await supabase.auth.resend({ email });
+    const { data, error } = await supabase.auth.resend({ type: 'signup', email });
     if (error) return { error: translateAuthError(error.message) };
     return { error: undefined, message: 'Link de confirmação reenviado', emailNotConfirmed: true };
   } catch (err: unknown) {
@@ -1160,7 +1162,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Persistir fila de mensagens no servidor com idempotência
       try {
         const today = new Date();
-        const hojeStr = `${today.getDate()}-${today.getMonth() + 1}`;
+        const hojeStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
         for (const item of res.fila) {
           // Verificar se já existe item idempotente para este dia + cobrança
@@ -1175,7 +1177,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             cobranca_id: item.cobranca_id,
             template_tipo: item.tipo,
             mensagem_texto: item.texto_mensagem,
-            status: 'pendente',
+            status: 'pendente' as const,
             chave_idempotencia: hojeStr + '-' + item.cobranca_id,
           };
 
@@ -1234,8 +1236,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Salvar credenciais reais do Supabase
   const saveSupabaseSettings = async (url: string, key: string) => {
-    
-    
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('aluguel_facil_supabase_url', url.trim());
+    localStorage.setItem('aluguel_facil_supabase_key', key.trim());
     window.location.reload();
   };
 
@@ -1252,10 +1255,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return {};
       }
 
-      // Mock Login
-      const mockUser = { id: 'usr_' + Date.now(), email };
+      // Mock Login: carrega o seed local para o painel não ficar vazio
+      const seed = getInitialSeedData();
+      const mockUser = { id: seed.user.id, email };
+      const mockProfile = { ...seed.profile, id: mockUser.id, email, onboarding_concluido: true };
+
       setUser(mockUser);
+      setProfile(mockProfile);
+      setImoveis(seed.imoveis);
+      setInquilinos(seed.inquilinos);
+      setCobrancas(seed.cobrancas);
+      setTemplates(seed.templates);
+
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(mockUser));
+      localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(mockProfile));
+      localStorage.setItem(STORAGE_KEYS.IMOVEIS, JSON.stringify(seed.imoveis));
+      localStorage.setItem(STORAGE_KEYS.INQUILINOS, JSON.stringify(seed.inquilinos));
+      localStorage.setItem(STORAGE_KEYS.COBRANCAS, JSON.stringify(seed.cobrancas));
+      localStorage.setItem(STORAGE_KEYS.TEMPLATES, JSON.stringify(seed.templates));
+
       navigate('/dashboard');
       return {};
     } catch (err: unknown) {

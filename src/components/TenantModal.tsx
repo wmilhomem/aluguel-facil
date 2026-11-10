@@ -97,7 +97,7 @@ export const TenantModal: React.FC<Props> = ({
         data_inicio_contrato: dataInicio,
         multa_atraso: parseFloat(multaAtraso.replace(',', '.')) || 2.0,
         juros_dia: parseFloat(jurosDia.replace(',', '.')) || 0.033,
-        ativo: true,
+        ativo: inquilinoParaEditar?.ativo ?? true,
       });
       onClose();
     } catch (err: unknown) {

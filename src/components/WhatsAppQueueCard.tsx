@@ -20,8 +20,21 @@ interface Props {
 }
 
 export const WhatsAppQueueCard: React.FC<Props> = ({ item }) => {
-  const { navigate } = useApp();
+  const { navigate, inquilinos } = useApp();
   const [copied, setCopied] = useState(false);
+
+  const inquilino = inquilinos.find((i) => i.id === item.inquilino_id);
+  const multaPercent = inquilino?.multa_atraso ?? 2;
+  const jurosPercent = inquilino?.juros_dia ?? 0.033;
+  const diasAtraso = item.dias_diferenca > 0 ? item.dias_diferenca : 1;
+  const valorOriginal = item.tipo.includes('atraso')
+    ? Number(
+        (
+          item.valor /
+          (1 + multaPercent / 100 + (jurosPercent / 100) * diasAtraso)
+        ).toFixed(2)
+      )
+    : item.valor;
 
   const handleCopy = async () => {
     try {
@@ -100,15 +113,7 @@ export const WhatsAppQueueCard: React.FC<Props> = ({ item }) => {
             {item.tipo.includes('atraso') ? (
               <div className="flex items-center gap-1.5">
                 <span className="line-through text-slate-400 text-xs font-semibold">
-                  {/* Calcula valor original se houver diferença */}
-                  {formatCurrency(
-                    Number(
-                      (
-                        item.valor /
-                        (1 + 0.02 + 0.00033 * (item.dias_diferenca > 0 ? item.dias_diferenca : 1))
-                      ).toFixed(2)
-                    )
-                  )}
+                  {formatCurrency(valorOriginal)}
                 </span>
                 <span className="text-base font-black text-rose-600">
                   {formatCurrency(item.valor)}

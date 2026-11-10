@@ -54,6 +54,7 @@ export const DashboardView: React.FC = () => {
     addImovel,
     markCobrancaPaid,
     runCronManual,
+    logout,
   } = useApp();
 
   const [tenantModalOpen, setTenantModalOpen] = useState(false);
@@ -118,12 +119,19 @@ export const DashboardView: React.FC = () => {
   };
 
   // Determina o status consolidado de cada inquilino no mês atual
+  const agora = new Date();
+  const mesAtual = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`;
+
   const inquilinosWithStatus = inquilinos.map((inq) => {
-    // Procura cobrança ativa do inquilino (prioriza atrasado, depois pendente, depois pago)
+    const cobrancasDoMes = cobrancas.filter(
+      (c) => c.inquilino_id === inq.id && c.data_vencimento.startsWith(mesAtual)
+    );
+
+    // Prioriza atrasado, depois pendente, depois pago — sempre dentro do mês atual.
     const cobAtiva =
-      cobrancas.find((c) => c.inquilino_id === inq.id && c.status === 'atrasado') ||
-      cobrancas.find((c) => c.inquilino_id === inq.id && c.status === 'pendente') ||
-      cobrancas.find((c) => c.inquilino_id === inq.id);
+      cobrancasDoMes.find((c) => c.status === 'atrasado') ||
+      cobrancasDoMes.find((c) => c.status === 'pendente') ||
+      cobrancasDoMes[0];
 
     let statusVisual: 'pago' | 'pendente' | 'atrasado' = 'pendente';
     if (cobAtiva) {
@@ -168,20 +176,7 @@ export const DashboardView: React.FC = () => {
               <button
                 onClick={() => {
                   localStorage.removeItem('ALUGUEL_FACIL_FORCE_DEMO');
-                  const { setUser, setProfile, setImoveis, setInquilinos, setCobrancas, setTemplates } = useApp();
-                  setUser(null);
-                  setProfile(createEmptyProfile());
-                  setImoveis([]);
-                  setInquilinos([]);
-                  setCobrancas([]);
-                  setTemplates([]);
-                  localStorage.removeItem(STORAGE_KEYS.USER);
-                  localStorage.removeItem(STORAGE_KEYS.PROFILE);
-                  localStorage.removeItem(STORAGE_KEYS.IMOVEIS);
-                  localStorage.removeItem(STORAGE_KEYS.INQUILINOS);
-                  localStorage.removeItem(STORAGE_KEYS.COBRANCAS);
-                  localStorage.removeItem(STORAGE_KEYS.TEMPLATES);
-                  navigate('/');
+                  void logout();
                 }}
                 className="px-4 py-1.5 rounded-lg bg-slate-900 text-slate-200 text-sm font-semibold hover:bg-slate-800 transition-colors"
               >

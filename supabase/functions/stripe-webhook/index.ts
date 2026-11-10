@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.14.0?target=deno";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.118.0";
 
 serve(async (req) => {
   try {
@@ -20,16 +20,23 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceRole);
 
+    if (!webhookSecret) {
+      return new Response("Webhook secret não configurado", { status: 500 });
+    }
+
     const signature = req.headers.get("stripe-signature");
     const bodyText = await req.text();
 
-    let event: Stripe.Event;
+    if (!signature) {
+      return new Response("Assinatura Stripe ausente", { status: 400 });
+    }
 
-    if (webhookSecret && signature) {
+    let event: Stripe.Event;
+    try {
       event = await stripe.webhooks.constructEventAsync(bodyText, signature, webhookSecret);
-    } else {
-      // Sem verificação estrita apenas se webhookSecret não estiver configurado em desenvolvimento
-      event = JSON.parse(bodyText);
+    } catch (err: any) {
+      console.error(`Falha na verificação da assinatura do webhook: ${err.message}`);
+      return new Response(`Webhook Error: ${err.message}`, { status: 400 });
     }
 
     console.log(`Recebido evento Stripe: ${event.type}`);
@@ -60,11 +67,20 @@ serve(async (req) => {
         const customerId = subscription.customer as string;
         const status = subscription.status === "active" || subscription.status === "trialing" ? "ativo" : "inativo";
         const priceId = subscription.items.data[0]?.price?.id;
+        const priceIndividual = Deno.env.get("STRIPE_PRICE_INDIVIDUAL");
+        const priceIntermediario = Deno.env.get("STRIPE_PRICE_INTERMEDIARIO");
+        const priceProfissional = Deno.env.get("STRIPE_PRICE_PROFISSIONAL");
 
         let planoNome = "intermediario";
-        if (priceId?.includes("27") || priceId?.includes("individual")) {
+        if (priceIndividual && priceId === priceIndividual) {
           planoNome = "individual";
-        } else if (priceId?.includes("97") || priceId?.includes("profissional")) {
+        } else if (priceProfissional && priceId === priceProfissional) {
+          planoNome = "profissional";
+        } else if (priceIntermediario && priceId === priceIntermediario) {
+          planoNome = "intermediario";
+        } else if (priceId?.includes("individual")) {
+          planoNome = "individual";
+        } else if (priceId?.includes("profissional")) {
           planoNome = "profissional";
         }
 

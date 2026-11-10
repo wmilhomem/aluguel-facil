@@ -42,7 +42,6 @@ export async function markCobrancaPaid(
       status: 'pago' satisfies StatusCobranca,
       data_pagamento: dataPagamento,
       link_comprovante: linkComprovante ?? null,
-      dias_atraso: 0,
     })
     .eq('id', id)
     .select('*')

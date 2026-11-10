@@ -21,7 +21,7 @@ import {
 import confetti from 'canvas-confetti';
 
 export const PlanosView: React.FC = () => {
-  const { profile, user, navigate, showToast, updateProfile } = useApp();
+  const { profile, user, navigate, showToast } = useApp();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
   const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
@@ -34,18 +34,13 @@ export const PlanosView: React.FC = () => {
     const isCancel = hash.includes('checkout=cancel') || search.includes('checkout=cancel');
 
     if (isSuccess) {
-      showToast('Assinatura Confirmada!', 'Seu plano Stripe foi ativado com sucesso. Aproveite o Aluguel Fácil!', 'success');
+      showToast('Pagamento recebido', 'Assim que o Stripe confirmar a assinatura, seu plano será ativado automaticamente.', 'info');
       setCheckoutNotice('success');
       try {
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
       } catch {
         // ignore
       }
-      // Ativa perfil local se em demo
-      updateProfile({
-        plano_status: 'ativo',
-        trial_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      });
     } else if (isCancel) {
       showToast('Checkout cancelado', 'Nenhuma cobrança foi efetuada. Você pode escolher seu plano a qualquer momento.', 'warning');
       setCheckoutNotice('cancel');
@@ -72,28 +67,11 @@ export const PlanosView: React.FC = () => {
       }
 
       if (res.error === 'STRIPE_FUNCTION_NOT_DEPLOYED') {
-        // Modo demonstração guiado: explica claramente o Stripe
-        const proceedSim = window.confirm(
-          `Modo de Simulação do Stripe Checkout:\n\n` +
-          `A Edge Function 'create-stripe-checkout' será ativada assim que você preencher sua STRIPE_SECRET_KEY no Supabase.\n\n` +
-          `Deseja simular a ativação imediata do ${plan.name} (R$ ${plan.priceMonthly}/mês) neste navegador para testar agora?`
+        showToast(
+          'Checkout indisponível',
+          'Configure a Edge Function create-stripe-checkout e a STRIPE_SECRET_KEY no Supabase para assinar.',
+          'info'
         );
-
-        if (proceedSim) {
-          await updateProfile({
-            plano: plan.id === 'individual' ? '1_imovel' : plan.id === 'profissional' ? 'ate_10_imoveis' : 'ate_3_imoveis',
-            plano_nome: plan.id,
-            plano_status: 'ativo',
-            trial_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          });
-          showToast('Plano ativado em modo teste!', `Você agora está no ${plan.name}.`, 'success');
-          try {
-            confetti({ particleCount: 80, spread: 60 });
-          } catch {
-            // ignore
-          }
-          navigate('/dashboard');
-        }
       } else {
         showToast('Erro ao abrir checkout', res.error || 'Verifique as chaves do Stripe.', 'error');
       }

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.14.0?target=deno";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.118.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,7 +29,7 @@ serve(async (req) => {
     });
 
     const body = await req.json();
-    const { priceId, userId, userEmail, success_url, cancel_url } = body;
+    const { priceId, success_url, cancel_url } = body;
 
     if (!priceId) {
       return new Response(
@@ -37,16 +38,62 @@ serve(async (req) => {
       );
     }
 
+    const allowedPrices = [
+      Deno.env.get("STRIPE_PRICE_INDIVIDUAL"),
+      Deno.env.get("STRIPE_PRICE_INTERMEDIARIO"),
+      Deno.env.get("STRIPE_PRICE_PROFISSIONAL"),
+      Deno.env.get("VITE_STRIPE_PRICE_INDIVIDUAL"),
+      Deno.env.get("VITE_STRIPE_PRICE_INTERMEDIARIO"),
+      Deno.env.get("VITE_STRIPE_PRICE_PROFISSIONAL"),
+    ].filter((value): value is string => Boolean(value));
+
+    if (!allowedPrices.includes(priceId)) {
+      return new Response(
+        JSON.stringify({ error: "priceId não autorizado" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const authHeader = req.headers.get("Authorization");
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return new Response(
+        JSON.stringify({ error: "Supabase não configurado" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Autenticação obrigatória" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) {
+      return new Response(
+        JSON.stringify({ error: "Sessão inválida" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const userId = authData.user.id;
+    const userEmail = authData.user.email ?? "";
+
     const origin = req.headers.get("origin") || "https://aluguelfacil.app";
     const successUrl = success_url || `${origin}/#dashboard?checkout=success`;
     const cancelUrl = cancel_url || `${origin}/#planos?checkout=cancel`;
 
-    // Configuração oficial exigida:
-    // payment_method_types: ['card', 'pix', 'boleto']
-    // mode: 'subscription'
-    // allow_promotion_codes: true
+    // Assinaturas aceitam apenas cartão. Pix/Boleto não são suportados em mode: 'subscription'.
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card", "pix", "boleto"],
+      payment_method_types: ["card"],
       mode: "subscription",
       allow_promotion_codes: true,
       subscription_data: {

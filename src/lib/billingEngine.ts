@@ -188,8 +188,11 @@ export function createPublicToken(): string {
  */
 export function buildPublicInvoiceUrl(cobranca: Pick<Cobranca, 'public_token'>): string {
   if (!cobranca.public_token) return '';
-  const appOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://aluguelfacil.app';
-  return `${appOrigin}/#fatura-${cobranca.public_token}`;
+  const configured = import.meta.env.VITE_APP_URL as string | undefined;
+  const appOrigin =
+    configured ||
+    (typeof window !== 'undefined' ? window.location.origin : 'https://aluguelfacil.app');
+  return `${appOrigin.replace(/\/$/, '')}/#fatura-${cobranca.public_token}`;
 }
 
 /**

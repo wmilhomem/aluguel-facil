@@ -50,15 +50,48 @@ export interface PixEMVOptions {
   valor?: number;
   txId?: string;
   mensagem?: string;
+  tipoChave?: string;
+}
+
+/**
+ * Normaliza a chave Pix conforme o tipo informado, conforme regras do Bacen.
+ */
+export function normalizePixKey(chave: string, tipoChave?: string): string {
+  const raw = (chave || '').trim();
+  if (!tipoChave) return raw;
+
+  const tipo = tipoChave.toLowerCase();
+
+  if (tipo.includes('email')) {
+    return raw.toLowerCase();
+  }
+
+  if (tipo.includes('telefone') || tipo.includes('phone')) {
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) return raw;
+    if (digits.startsWith('55') && digits.length >= 12) return `+${digits}`;
+    return `+55${digits}`;
+  }
+
+  if (tipo.includes('cpf') || tipo.includes('cnpj')) {
+    return raw.replace(/\D/g, '');
+  }
+
+  return raw;
 }
 
 /**
  * Gera a string Pix Copia e Cola oficial (EMV BR Code)
  */
 export function generatePixEMV(options: PixEMVOptions): string {
-  const { chave, nomeRecebedor, cidade = 'GOIANIA', valor, txId, mensagem } = options;
+  const { chave, nomeRecebedor, cidade = 'GOIANIA', valor, txId, mensagem, tipoChave } = options;
 
   if (!chave) {
+    return '';
+  }
+
+  const chaveNormalizada = normalizePixKey(chave, tipoChave);
+  if (!chaveNormalizada) {
     return '';
   }
 
@@ -68,7 +101,7 @@ export function generatePixEMV(options: PixEMVOptions): string {
   // 26: Merchant Account Information (Pix)
   // Sub-campos: 00: GUI ("br.gov.bcb.pix"), 01: Chave Pix, 02: Descrição (opcional)
   let merchantAccount = formatTLV('00', 'br.gov.bcb.pix');
-  merchantAccount += formatTLV('01', chave.trim());
+  merchantAccount += formatTLV('01', chaveNormalizada);
   if (mensagem) {
     const cleanMsg = sanitizeText(mensagem, 40);
     if (cleanMsg) {

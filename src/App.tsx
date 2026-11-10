@@ -16,7 +16,11 @@ import { CobrancasView } from './views/CobrancasView';
 import { ConfiguracoesView } from './views/ConfiguracoesView';
 import { PlanosView } from './views/PlanosView';
 import { FaturaPublicaView } from './views/FaturaPublicaView';
+import { ForgotPasswordView } from './views/ForgotPasswordView';
+import { ResetPasswordView } from './views/ResetPasswordView';
+import { ConfirmEmailView } from './views/ConfirmEmailView';
 import { Toast } from './components/Toast';
+import { isDemoMode } from './lib/runtime';
 
 const MainRouter: React.FC = () => {
   const { currentRoute, user, profile, toast, hideToast } = useApp();
@@ -62,6 +66,12 @@ const MainRouter: React.FC = () => {
         return <PlanosView />;
       case '/fatura':
         return <FaturaPublicaView />;
+      case '/recuperar-senha':
+        return <ForgotPasswordView />;
+      case '/redefinir-senha':
+        return <ResetPasswordView />;
+      case '/confirmar-email':
+        return <ConfirmEmailView />;
       default:
         return user ? <DashboardView /> : <LandingView />;
     }

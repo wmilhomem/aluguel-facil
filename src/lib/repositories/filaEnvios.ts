@@ -72,7 +72,9 @@ export async function createFilaEnvio(fila: Omit<FilaEnvio, 'id' | 'data_criacao
   const { data, error } = await supabase.from('fila_envio').insert({
     ...fila,
     data_criacao: new Date().toISOString(),
-    chave_idempotencia: fila.chave_idempotencia || `${new Date().getDate()}-${Math.random().toString(36).substring(2, 8)}`,
+    chave_idempotencia:
+      fila.chave_idempotencia ||
+      `${new Date().toISOString().slice(0, 10)}-${Math.random().toString(36).substring(2, 8)}`,
   }).select().single();
 
   if (error) throw error;
